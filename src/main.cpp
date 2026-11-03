@@ -34,6 +34,8 @@ static const uint8_t PIN_CSN = D2;  // GPIO4  (D5/D6/D7 are the SPI bus)
 static const uint8_t REG_SETUP_AW   = 0x03;  // address width
 static const uint8_t REG_RX_ADDR_P0 = 0x0A;  // pipe 0 RX address
 static const uint8_t REG_TX_ADDR    = 0x10;  // TX address
+static const uint8_t REG_RF_SETUP   = 0x06;  // RF setup (chip sanity check)
+static const uint8_t REG_CONFIG     = 0x00;  // config (chip sanity check)
 
 static const uint8_t FIXED_LEN = 32;         // fixed payload length to capture
 static const uint8_t AW_2BYTE  = 0x00;       // SETUP_AW value: "illegal" 2-byte
@@ -109,6 +111,15 @@ static bool     g_capturing     = false;
 static bool     g_haveLastRaw   = false;
 static uint8_t  g_lastRaw[FIXED_LEN];
 
+// Custom RX trigger address ('w<hex>'): bytes stored AS GIVEN (the on-air
+// order as seen in the RAW view). 'o' flips how they are written to the
+// nRF24 address registers, since the on-air byte order vs the register's
+// LSByte-first write order is unverified.
+static bool     g_customActive   = false;
+static uint8_t  g_customBytes[5];
+static uint8_t  g_customLen      = 0;     // 3..5 when active
+static bool     g_customReversed = false;
+
 // Optional print filter ('f<hex>'): only print frames whose RAW bytes contain
 // this byte substring (up to 8 bytes). g_filterLen == 0 means "no filter".
 static uint8_t  g_filter[8];
@@ -141,36 +152,71 @@ static void hex2(const uint8_t b, char *out) {
   out[1] = HEXD[b & 0x0F];
 }
 
-// Set SETUP_AW=0 (2-byte illegal address) and program the pipe-0 address with
-// exactly 2 bytes. Call this AFTER every RF24 call that might touch address
-// width or pipe 0 (openReadingPipe, openWritingPipe, begin, ...). RF24 caches
-// address widths internally but never reads SETUP_AW back on the data path,
-// so re-writing the register here is authoritative.
+// Render len bytes as uppercase hex (out must hold len*2+1 chars).
+static void hexStr(const uint8_t *b, uint8_t len, char *out) {
+  for (uint8_t i = 0; i < len; i++) hex2(b[i], out + i * 2);
+  out[len * 2] = '\0';
+}
+
+// Compute the bytes to program into the nRF24 address registers and the
+// matching SETUP_AW value, for the active trigger-address mode:
+//   * 2-byte preamble variants ('a'): SETUP_AW=0x00 (the promiscuous trick)
+//   * custom trigger ('w<hex>'): SETUP_AW = 3->0x01, 4->0x02, 5->0x03
+// The custom bytes are stored as given (on-air RAW order); with 'o' active
+// they are written reversed, because the mapping between on-air bit order
+// and the register's LSByte-first write order is unverified.
+// reg[] is always 5 bytes long (register is physically 5 bytes); only the
+// first len bytes are matched and get written to the low register bytes.
+static void buildTriggerReg(uint8_t reg[5], uint8_t &len, uint8_t &awVal) {
+  if (g_customActive && g_customLen >= 3 && g_customLen <= 5) {
+    len = g_customLen;
+    for (uint8_t i = 0; i < len; i++) {
+      reg[i] = g_customReversed ? g_customBytes[len - 1 - i] : g_customBytes[i];
+    }
+    awVal = (uint8_t)(len - 2);  // 3->0x01, 4->0x02, 5->0x03
+  } else {
+    len = 2;
+    reg[0] = ADDR_VARIANTS[g_addrVariant][0];
+    reg[1] = ADDR_VARIANTS[g_addrVariant][1];
+    awVal = AW_2BYTE;
+  }
+  for (uint8_t i = len; i < 5; i++) reg[i] = 0;  // zero-pad the 5-byte buffer
+}
+
+// Program SETUP_AW and the pipe-0 RX address with the active trigger bytes.
+// Call this AFTER every RF24 call that might touch address width or pipe 0
+// (openReadingPipe, openWritingPipe, begin, ...). RF24 caches address widths
+// internally but never reads SETUP_AW back on the data path, so re-writing
+// the register here is authoritative.
 static void forcePromiscuousAddress() {
-  const uint8_t *addr = ADDR_VARIANTS[g_addrVariant];
+  uint8_t reg[5];
+  uint8_t len;
+  uint8_t awVal;
+  buildTriggerReg(reg, len, awVal);
 
-  // The trick: SETUP_AW = 0x00 => 2-byte address width.
-  radio.rawWriteReg8(REG_SETUP_AW, AW_2BYTE);
+  // Apply the address width (0x00 = 2-byte trick, 0x01..0x03 = 3..5 bytes).
+  radio.rawWriteReg8(REG_SETUP_AW, awVal);
 
-  // Re-program pipe 0 (RX side) with only our 2 bytes, matching AW=2.
-  uint8_t pipe0[2] = { addr[0], addr[1] };
-  radio.rawWriteReg(REG_RX_ADDR_P0, pipe0, 2);
+  // Re-program pipe 0 (RX side) with our trigger bytes, matching AW.
+  radio.rawWriteReg(REG_RX_ADDR_P0, reg, len);
 
   // Verify by reading SETUP_AW back; log anything unexpected.
   g_lastAWReadback = radio.rawReadReg(REG_SETUP_AW) & 0x03;
-  if (g_lastAWReadback != AW_2BYTE) {
-    Serial.printf("[warn] SETUP_AW readback = 0x%02X (expected 0x00)\r\n",
-                  g_lastAWReadback);
+  if (g_lastAWReadback != awVal) {
+    Serial.printf("[warn] SETUP_AW readback = 0x%02X (expected 0x%02X)\r\n",
+                  g_lastAWReadback, awVal);
   }
 }
 
 // Program the TX address registers for replay (TX_ADDR + pipe0 mirror).
 static void forcePromiscuousTxAddress() {
-  const uint8_t *addr = ADDR_VARIANTS[g_addrVariant];
-  uint8_t two[2] = { addr[0], addr[1] };
-  radio.rawWriteReg8(REG_SETUP_AW, AW_2BYTE);
-  radio.rawWriteReg(REG_TX_ADDR, two, 2);
-  radio.rawWriteReg(REG_RX_ADDR_P0, two, 2);  // RF24 mirrors pipe0 for ACKs
+  uint8_t reg[5];
+  uint8_t len;
+  uint8_t awVal;
+  buildTriggerReg(reg, len, awVal);
+  radio.rawWriteReg8(REG_SETUP_AW, awVal);
+  radio.rawWriteReg(REG_TX_ADDR, reg, len);
+  radio.rawWriteReg(REG_RX_ADDR_P0, reg, len);  // RF24 mirrors pipe0 for ACKs
 }
 
 // Apply the full promiscuous RX configuration. Re-applies SETUP_AW=0 after
@@ -191,55 +237,88 @@ static void applyRxConfig() {
   //   * stopListening():  write_register(RX_ADDR_P0, pipe0_writing_address)
   // If the caches hold anything but our trigger bytes, every RX/TX switch
   // overwrites the trigger address with junk. So open pipe 0 with a 5-byte
-  // buffer whose first 2 bytes are our trigger: the register is physically 5
-  // bytes and with SETUP_AW=0 only the low 2 bytes are matched, so the
+  // buffer whose first bytes are our trigger: the register is physically 5
+  // bytes and only the SETUP_AW-selected low bytes are matched, so the
   // trailing zeros are harmless — and both RF24 caches now agree with us.
-  uint8_t buf5[5] = { ADDR_VARIANTS[g_addrVariant][0],
-                      ADDR_VARIANTS[g_addrVariant][1], 0, 0, 0 };
-  radio.openWritingPipe(buf5);   // cache pipe0_writing_address + TX_ADDR
-  radio.openReadingPipe(0, buf5);  // cache pipe0_reading_address
+  uint8_t reg[5];
+  uint8_t len;
+  uint8_t awVal;
+  buildTriggerReg(reg, len, awVal);
+  radio.openWritingPipe(reg);    // cache pipe0_writing_address + TX_ADDR
+  radio.openReadingPipe(0, reg); // cache pipe0_reading_address
 
-  // Now apply the actual promiscuous trick (SETUP_AW=0) and re-program the
-  // low 2 register bytes ourselves while CE is low (standby: W_REGISTER is
-  // legal here, unlike after startListening()).
+  // Now apply the actual address width (promiscuous trick or custom AW) and
+  // re-program the low register bytes ourselves while CE is low (standby:
+  // W_REGISTER is legal here, unlike after startListening()).
   forcePromiscuousAddress();
   radio.flush_rx();
 
   // Debug readback (read-only, legal in any state): show the trigger address
   // actually on the chip next to the SETUP_AW readback.
-  uint8_t p0rb[2];
-  radio.rawReadRegBuf(REG_RX_ADDR_P0, p0rb, 2);
-  Serial.printf("[cfg] ch=%u variant=%s SETUP_AW=0x%02X "
-                "RX_ADDR_P0=%02X:%02X len=%u CRC=off ack=off\r\n",
-                g_channel, ADDR_VARIANT_NAMES[g_addrVariant], g_lastAWReadback,
-                p0rb[0], p0rb[1], FIXED_LEN);
+  uint8_t p0rb[5];
+  radio.rawReadRegBuf(REG_RX_ADDR_P0, p0rb, len);
+  char p0hx[11];
+  hexStr(p0rb, len, p0hx);
+  Serial.printf("[cfg] ch=%u addr=%s SETUP_AW=0x%02X "
+                "RX_ADDR_P0=%s len=%u CRC=off ack=off\r\n",
+                g_channel,
+                g_customActive ? "custom" : ADDR_VARIANT_NAMES[g_addrVariant],
+                g_lastAWReadback, p0hx, FIXED_LEN);
 }
 
 // Route ALL radio.startListening() calls through here. startListening()
 // restores RX_ADDR_P0 from RF24's pipe0_reading_address cache (which now
 // holds our trigger bytes); afterwards we can only READ the chip, so print
 // the on-chip trigger address + SETUP_AW readback once per config change.
-static void startRx() {
+// The quiet variant (verbose=false) skips all reads/prints and is used by the
+// channel-scan loop, which calls startListening ~250 times per sweep.
+static void startRx(bool verbose = true) {
   radio.startListening();
-  uint8_t p0rb[2];
-  radio.rawReadRegBuf(REG_RX_ADDR_P0, p0rb, 2);
-  g_lastAWReadback = radio.rawReadReg(REG_SETUP_AW) & 0x03;
-  Serial.printf("[rx] SETUP_AW=0x%02X RX_ADDR_P0=%02X:%02X (on chip)\r\n",
-                g_lastAWReadback, p0rb[0], p0rb[1]);
+  if (!verbose) return;
+  uint8_t aw = radio.rawReadReg(REG_SETUP_AW) & 0x03;
+  g_lastAWReadback = aw;
+  uint8_t n = (aw == 0) ? 2 : (uint8_t)(aw + 2);  // AW value -> byte count
+  if (n > 5) n = 5;
+  uint8_t p0rb[5];
+  radio.rawReadRegBuf(REG_RX_ADDR_P0, p0rb, n);
+  char hx[11];
+  hexStr(p0rb, n, hx);
+  Serial.printf("[rx] SETUP_AW=0x%02X RX_ADDR_P0=%s (on chip)\r\n", aw, hx);
 }
 
 static void printConfig() {
-  Serial.printf("channel      : %u (%.3f GHz)\r\n", g_channel,
+  Serial.printf("channel       : %u (%.3f GHz)\r\n", g_channel,
                 2.400 + g_channel * 0.001);
-  Serial.printf("addr variant : %s (0x%02X 0x%02X)\r\n",
-                ADDR_VARIANT_NAMES[g_addrVariant], ADDR_VARIANTS[g_addrVariant][0],
-                ADDR_VARIANTS[g_addrVariant][1]);
-  Serial.printf("SETUP_AW     : 0x%02X (0x00 = 2-byte illegal width)\r\n",
-                g_lastAWReadback);
-  Serial.printf("chip connected: %s\r\n",
-                radio.isChipConnected() ? "yes" : "NO");
-  Serial.printf("capturing    : %s\r\n", g_capturing ? "yes" : "no");
-  Serial.printf("filter       : %s\r\n",
+  if (g_customActive) {
+    char hx[11];
+    hexStr(g_customBytes, g_customLen, hx);
+    Serial.printf("trigger      : custom %s (%u bytes, register order: %s)\r\n",
+                  hx, g_customLen,
+                  g_customReversed ? "reversed" : "as-given");
+  } else {
+    Serial.printf("trigger      : variant %s (0x%02X 0x%02X)\r\n",
+                  ADDR_VARIANT_NAMES[g_addrVariant],
+                  ADDR_VARIANTS[g_addrVariant][0],
+                  ADDR_VARIANTS[g_addrVariant][1]);
+  }
+  if (g_lastAWReadback == 0xFF) {
+    Serial.println(F("SETUP_AW      : (radio not initialised)"));
+    Serial.println(F("chip check    : (radio not initialised)"));
+  } else {
+    Serial.printf("SETUP_AW      : 0x%02X (0x00 = 2-byte trick, 0x01..3 = 3..5 B)\r\n",
+                  g_lastAWReadback);
+    // RF24::isChipConnected() only checks SETUP_AW in 1..3, which the AW=0
+    // promiscuous trick always fails. Do our own SPI sanity check instead:
+    // a dead/floating bus reads 0xFF, a held reset reads 0x00.
+    uint8_t rfSetup = radio.rawReadReg(REG_RF_SETUP);
+    uint8_t cfgReg = radio.rawReadReg(REG_CONFIG);
+    bool alive = !(rfSetup == 0x00 || rfSetup == 0xFF ||
+                   cfgReg == 0x00 || cfgReg == 0xFF);
+    Serial.printf("chip check    : %s (RF_SETUP=0x%02X CONFIG=0x%02X)\r\n",
+                  alive ? "ok" : "NO SPI RESPONSE", rfSetup, cfgReg);
+  }
+  Serial.printf("capturing     : %s\r\n", g_capturing ? "yes" : "no");
+  Serial.printf("filter        : %s\r\n",
                 g_filterLen == 0 ? "(none)"
                                  : "(active, see last 'f' command)");
 }
@@ -248,9 +327,12 @@ static void printHelp() {
   Serial.println(F(
       "\r\n=== chilipad-rf promiscuous sniffer ===\r\n"
       "h      help + current config\r\n"
-      "s      channel scan (2 s, testRPD carrier detect; press remote keys)\r\n"
+      "s<n>   channel scan, n seconds (default 2, max 30; press remote keys)\r\n"
       "c<n>   set channel 0..125 (default 50 = 2450 MHz)\r\n"
       "a      cycle address variant: AAAA, 5555, 00AA, 0055, AA00, 5500\r\n"
+      "w<hex> custom RX trigger, 3-5 bytes in on-air RAW order\r\n"
+      "       (e.g. w0B5C8E03); 'w' alone = back to the 2-byte variants\r\n"
+      "o      flip custom trigger byte order (as-given <-> reversed)\r\n"
       "p      start/stop promiscuous capture (RAW + bit-reversed REV lines)\r\n"
       "t      top 10 most frequent 8-byte prefixes of REV frames\r\n"
       "z      clear the prefix table\r\n"
@@ -351,20 +433,28 @@ static void printFrame(const uint8_t *raw, unsigned long ms) {
 // Channel scan ('s')
 // ---------------------------------------------------------------------------
 
-static void channelScan() {
-  Serial.println(F("[scan] 2 s carrier-detect sweep, press remote buttons..."));
-  const unsigned long DURATION_MS = 2000;
-  const unsigned long PER_CHANNEL_US = 150;  // RPD settles in ~100 us
+static void channelScan(uint8_t seconds) {
+  if (seconds == 0) seconds = 2;   // 's' with no number -> default 2 s
+  if (seconds > 30) seconds = 30;  // clamp
+  Serial.printf("[scan] %u s carrier-detect sweep, press remote buttons...\r\n",
+                seconds);
   static uint16_t hits[126];
   memset(hits, 0, sizeof(hits));
 
-  startRx();
   unsigned long start = millis();
   uint32_t sweeps = 0;
-  while (millis() - start < DURATION_MS) {
+  // Scanner-example pattern per channel. The RPD window is only ~40 us and
+  // the PLL needs ~130 us to settle after setChannel, so dwell >= 250 us:
+  //   stopListening (CE low) -> setChannel (PLL settles) -> startListening
+  //   (CE high, quiet) -> dwell 250 us -> stopListening -> testRPD (RPD
+  //   latches the carrier-detect result of the dwell window)
+  while (millis() - start < seconds * 1000UL) {
     for (uint8_t ch = 0; ch <= 125; ch++) {
-      radio.setChannel(ch);
-      delayMicroseconds(PER_CHANNEL_US);
+      radio.stopListening();  // CE low
+      radio.setChannel(ch);   // PLL settles while CE low
+      startRx(false);         // CE high (quiet: no per-channel print)
+      delayMicroseconds(250);
+      radio.stopListening();  // CE low again; RPD latched
       if (radio.testRPD()) {
         if (hits[ch] != 0xFFFF) hits[ch]++;
       }
@@ -372,7 +462,6 @@ static void channelScan() {
     sweeps++;
     yield();  // feed the ESP8266 watchdog between sweeps
   }
-  radio.stopListening();
 
   // Top 5 channels for highlighting.
   uint8_t top5[5];
@@ -425,18 +514,24 @@ static void replayFrame(uint16_t times) {
   }
   if (times == 0) times = 10;
   bool wasCapturing = g_capturing;
-  Serial.printf("[replay] TX ch=%u addr=%s %ux: ", g_channel,
-                ADDR_VARIANT_NAMES[g_addrVariant], times);
+  uint8_t reg[5];
+  uint8_t len;
+  uint8_t awVal;
+  buildTriggerReg(reg, len, awVal);
+  char addrHex[11];
+  hexStr(reg, len, addrHex);
+  Serial.printf("[replay] TX ch=%u addr=%s(%s) SETUP_AW=0x%02X %ux: ",
+                g_channel,
+                g_customActive ? "custom" : ADDR_VARIANT_NAMES[g_addrVariant],
+                addrHex, awVal, times);
   radio.stopListening();
   radio.flush_tx();
   // Give RF24's pipe0_writing_address cache our trigger bytes first, so its
   // own TX-side register writes (openWritingPipe writes RX_ADDR_P0/TX_ADDR at
-  // cached addr_width) land on our leading 2 bytes. Then apply SETUP_AW=0 and
-  // the raw 2-byte register writes while CE is low (standby).
-  uint8_t buf5[5] = { ADDR_VARIANTS[g_addrVariant][0],
-                      ADDR_VARIANTS[g_addrVariant][1], 0, 0, 0 };
-  radio.openWritingPipe(buf5);
-  forcePromiscuousTxAddress();  // 2-byte TX address, AW=0, CRC/ack already off
+  // cached addr_width) land on our leading bytes. Then apply SETUP_AW and the
+  // raw register writes while CE is low (standby).
+  radio.openWritingPipe(reg);
+  forcePromiscuousTxAddress();  // trigger address, CRC/ack already off
   for (uint16_t i = 0; i < times; i++) {
     radio.write(g_lastRaw, FIXED_LEN, true);  // no-ack write
     delay(5);                                 // ~5 ms between bursts
@@ -508,7 +603,7 @@ static void handleCommand(const char *cmd) {
       break;
 
     case 's':
-      channelScan();
+      channelScan(num >= 0 ? (uint8_t)num : 0);  // 0 -> default 2 s
       break;
 
     case 'c':
@@ -525,11 +620,86 @@ static void handleCommand(const char *cmd) {
       break;
 
     case 'a':
-      g_addrVariant = (g_addrVariant + 1) % NUM_ADDR_VARIANTS;
+      if (g_customActive) {
+        // A custom trigger is active: switch back to the 2-byte variant list
+        // at the currently selected variant.
+        g_customActive = false;
+        applyRxConfig();
+        if (g_capturing) startRx();
+        Serial.printf("[addr] custom trigger off, back to variant %s\r\n",
+                      ADDR_VARIANT_NAMES[g_addrVariant]);
+      } else {
+        g_addrVariant = (g_addrVariant + 1) % NUM_ADDR_VARIANTS;
+        applyRxConfig();
+        if (g_capturing) startRx();
+        Serial.printf("[cfg] address variant -> %s\r\n",
+                      ADDR_VARIANT_NAMES[g_addrVariant]);
+      }
+      break;
+
+    case 'w': {
+      if (cmd[1] == '\0') {
+        // 'w' alone: return to the 2-byte preamble-variant behavior.
+        if (g_customActive) {
+          g_customActive = false;
+          applyRxConfig();
+          if (g_capturing) startRx();
+          Serial.printf("[addr] custom trigger off, back to variant %s\r\n",
+                        ADDR_VARIANT_NAMES[g_addrVariant]);
+        } else {
+          Serial.printf("[addr] already in 2-byte variant mode (%s); "
+                        "w<hex> sets a custom 3-5 byte trigger\r\n",
+                        ADDR_VARIANT_NAMES[g_addrVariant]);
+        }
+        break;
+      }
+      // Parse contiguous hex digits after 'w' (3-5 full bytes expected).
+      uint8_t bytes[5];
+      uint8_t nib = 0;
+      uint8_t cur = 0;
+      bool bad = false;
+      const char *p = cmd + 1;
+      while (*p) {
+        char c = *p++;
+        int8_t v;
+        if (c >= '0' && c <= '9') v = c - '0';
+        else if (c >= 'a' && c <= 'f') v = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F') v = c - 'A' + 10;
+        else { bad = true; break; }  // only hex digits accepted
+        if (nib >= 10) { bad = true; break; }  // more than 5 bytes
+        if (nib & 1) bytes[nib / 2] = (uint8_t)((cur << 4) | v);
+        else cur = (uint8_t)v;
+        nib++;
+      }
+      if (bad || (nib & 1) != 0 || nib / 2 < 3 || nib / 2 > 5) {
+        Serial.println(F("[addr] usage: w<hex> = 3-5 bytes, e.g. w0B5C8E03 "
+                         "('w' alone = 2-byte variants)"));
+        break;
+      }
+      memcpy(g_customBytes, bytes, sizeof(bytes));
+      g_customLen = nib / 2;
+      g_customActive = true;
+      g_customReversed = false;  // a new address starts as-given; 'o' flips
       applyRxConfig();
       if (g_capturing) startRx();
-      Serial.printf("[cfg] address variant -> %s\r\n",
-                    ADDR_VARIANT_NAMES[g_addrVariant]);
+      char hx[11];
+      hexStr(g_customBytes, g_customLen, hx);
+      Serial.printf("[addr] custom trigger %s (%u bytes, register order: "
+                    "as-given; 'o' flips)\r\n", hx, g_customLen);
+      break;
+    }
+
+    case 'o':
+      if (!g_customActive) {
+        Serial.println(F("[addr] 'o' only applies to a custom w<hex> trigger "
+                         "(the 2-byte variants already cover both orders)"));
+        break;
+      }
+      g_customReversed = !g_customReversed;
+      applyRxConfig();
+      if (g_capturing) startRx();
+      Serial.printf("[addr] custom trigger register order -> %s\r\n",
+                    g_customReversed ? "reversed" : "as-given");
       break;
 
     case 'p':

@@ -43,10 +43,12 @@ menu and current config at any time.
 
 | Cmd      | Action |
 |----------|--------|
-| `h`      | help + current config (channel, address variant, SETUP_AW readback, `isChipConnected()`) |
-| `s`      | 2-second channel scan using `testRPD()` carrier detect; press remote buttons during it; prints per-channel hits and the top 5 |
+| `h`      | help + current config (channel, trigger address, SETUP_AW + RX_ADDR_P0 readback, SPI chip check) |
+| `s<n>`   | channel scan, n seconds (default 2, max 30) using `testRPD()` carrier detect; press remote buttons during it; prints per-channel hits and the top 5 |
 | `c<n>`   | set channel 0..125 (default 50 = 2450 MHz) |
 | `a`      | cycle address variant: `AAAA`, `5555`, `00AA`, `0055`, `AA00`, `5500` (bytes listed in register LSByte-first order; try all orientations) |
+| `w<hex>` | custom RX trigger address, 3–5 bytes given in **on-air RAW order** (e.g. `w0B5C8E03` — the constant frame prefix found after the preamble). Sets SETUP_AW to 3/4/5 bytes accordingly. `w` alone returns to the 2-byte variants |
+| `o`      | flip the custom trigger's register byte order (as-given ↔ reversed); the on-air byte order vs the nRF24's LSByte-first register write order is unverified, so try both |
 | `p`      | start/stop promiscuous capture. Each packet prints `<millis> RAW <32 bytes hex> \| REV <bit-reversed hex>` |
 | `t`      | top 10 most frequent 8-byte prefixes of REV frames (real frames share the sync word, so it dominates noise) |
 | `z`      | clear the prefix table |
@@ -79,6 +81,15 @@ menu and current config at any time.
 5. **Verify.** Send `x10` to replay the last captured RAW frame 10 times back
    at the receiver with the same channel/2-byte address, no CRC, no ack. If
    the target reacts, your captured framing is right.
+6. **Refine with a custom trigger.** Capture showed the on-air bitstream after
+   the preamble starts with the constant bytes `0B 5C 8E 03` (RAW order).
+   Trigger on those instead of the preamble: send `w0B5C8E03` (3–5 bytes are
+   accepted, given in RAW order). The mapping between on-air byte order and
+   the nRF24's LSByte-first register write is unverified, so if nothing
+   triggers, press `o` to flip the byte order. `w` alone (or `a`) returns to
+   the 2-byte preamble variants. The `[cfg]`/`[rx]` lines print the SETUP_AW
+   value and the full RX_ADDR_P0 readback so you can confirm what's actually
+   on the chip.
 
 ## Notes / gotchas
 
