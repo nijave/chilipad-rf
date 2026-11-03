@@ -1,0 +1,1482 @@
+/*
+ * chilipad-sniffer: raw 2.4 GHz sniffer for the LT8920 based chilipad remote,
+ * running on a Nordic nRF52840 Dongle (PCA10059) under Zephyr.
+ *
+ * This is the nRF52 sibling of the ESP8266 + nRF24L01+ promiscuous sniffer in
+ * ../../src/main.cpp.  Instead of Travis Goodspeed's "illegal 2-byte address"
+ * trick it uses the nRF52840 RADIO peripheral directly: the LT8920's sync word
+ * (or any 3..5 byte prefix of the frame after the preamble) is loaded as a
+ * logical RX address, so the radio only ends a reception on a real frame.  The
+ * payload that follows the address is dumped in the same RAW / REV form the
+ * nRF24 firmware produces, so the laptop GUI can parse either receiver.
+ *
+ * No Bluetooth stack, no ESB library, no SoftDevice: direct NRF_RADIO,
+ * NRF_TIMER1 and NRF_PPI register access (via the nrfx HAL inline accessors).
+ *
+ * ---------------------------------------------------------------------------
+ * Address mapping (why the default is "as given" + "bit reversed")
+ * ---------------------------------------------------------------------------
+ * nRF52840 Product Specification, RADIO chapter:
+ *   "The byte ordering on air is always least significant byte first for the
+ *    ADDRESS and PAYLOAD fields ... The ADDRESS fields are always transmitted
+ *    and received least significant bit first."
+ * Logical address 0 is BASE0 followed by PREFIX0.AP0, where AP0 is the *most*
+ * significant byte of the address and therefore the last one on air.  The base
+ * is truncated "from the least significant byte if PCNF1.BALEN is less than
+ * 4".  So for a 4 byte address A B C D (on-air order):
+ *
+ *   BASE0[7:0]   = A      (first byte on air)
+ *   BASE0[15:8]  = B
+ *   BASE0[23:16] = C
+ *   PREFIX0.AP0  = D      (last byte on air), BALEN = 3
+ *
+ * The byte order therefore needs no fiddling: first on-air byte -> lowest
+ * BASE0 byte.  The *bit* order does: the nRF24/LT8920 RAW view this tool
+ * mirrors presents each address byte MSB first (that is why the ESP firmware
+ * has to bit-reverse every byte for its REV view), while the nRF52 compares
+ * address bits LSBit first.  Every address byte is therefore bit-reversed
+ * before it is written to BASE0/PREFIX0 - exactly the bit swap Nordic's own
+ * ESB driver performs in addr_conv().  Default: order as given, bit reversal
+ * ON.  'o' and 'r' flip the two halves at runtime so all four combinations
+ * can be tried against a live signal.
+ *
+ * ---------------------------------------------------------------------------
+ * Receive path
+ * ---------------------------------------------------------------------------
+ * Two payload buffers are alternated.  PACKETPTR is latched when START runs,
+ * so the ADDRESS interrupt points PACKETPTR at the *other* buffer while the
+ * current packet is still being received; the END_START short then starts the
+ * next reception with the new pointer already in place.  END pushes the
+ * finished buffer (timestamp captured at its ADDRESS event, RSSI, channel)
+ * into a fixed ring and the main thread does all of the printing.
+ *
+ * A packet that matches no address never produces END - it aborts and raises
+ * DISABLED, and the ISR simply starts the receiver again.
+ */
+
+#include <string.h>
+
+#include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/uart.h>
+#include <zephyr/sys/ring_buffer.h>
+
+#include <nrfx.h>
+#include <hal/nrf_clock.h>
+#include <hal/nrf_ppi.h>
+#include <hal/nrf_radio.h>
+#include <hal/nrf_timer.h>
+
+/* ------------------------------------------------------------------------- */
+/* Tunables and fixed sizes                                                  */
+/* ------------------------------------------------------------------------- */
+
+#define PAYLOAD_MAX       255           /* PCNF1.MAXLEN/STATLEN are 8 bit */
+#define RX_BUFS           2             /* double buffering, see top comment */
+#define PKT_RING_LEN      16            /* ISR -> main thread packet ring */
+#define TX_RING_BYTES     8192          /* non-blocking console output ring */
+#define TX_CHUNK_BYTES    64
+#define LINE_MAX          1400          /* one printed line, no allocation */
+
+#define DEFAULT_CHANNEL   50            /* 2450 MHz */
+#define DEFAULT_LEN       64
+#define DEFAULT_ADDR_LEN  4
+#define CHANNEL_MAX       100
+
+/* TIMER1 is free on this board (the kernel clock uses RTC1, no nrfx timer
+ * driver is enabled and there is no radio/802.15.4 stack).  PRESCALER 4 turns
+ * the 16 MHz peripheral clock into the 1 MHz timestamp tick. */
+#define CAPTURE_TIMER     NRF_TIMER1
+#define CAPTURE_PRESCALE  4
+#define CAPTURE_PPI_CH    NRF_PPI_CHANNEL0
+
+/* RADIO events that drive the receive path. */
+#define RADIO_INT_MASK    (NRF_RADIO_INT_ADDRESS_MASK | \
+			   NRF_RADIO_INT_END_MASK | \
+			   NRF_RADIO_INT_DISABLED_MASK)
+
+/* ------------------------------------------------------------------------- */
+/* State                                                                     */
+/* ------------------------------------------------------------------------- */
+
+/* Radio configuration (touched by the main thread only, with the RADIO IRQ
+ * masked while it changes). */
+static uint8_t  g_channel   = DEFAULT_CHANNEL;
+static uint8_t  g_len       = DEFAULT_LEN;
+
+/* Trigger address, in on-air (RAW view) order, MSB first per byte. */
+static uint8_t  g_addr[DEFAULT_ADDR_LEN] = {0x0B, 0x5C, 0x8E, 0x03};
+static uint8_t  g_addr_len  = DEFAULT_ADDR_LEN;
+static bool     g_order_rev;             /* 'o': reverse the byte sequence */
+static bool     g_bit_rev   = true;      /* 'r': bit-reverse every byte */
+
+/* Values actually written to the address registers, for 'h'. */
+static uint32_t g_base0_written;
+static uint32_t g_prefix0_written;
+static uint8_t  g_balen_written;
+
+static bool     g_capturing;             /* RX running, packets are pushed */
+static bool     g_hfxo_ok;
+
+/* Double buffer bookkeeping.  g_cur is the buffer the *next* reception uses;
+ * it is advanced in the ADDRESS interrupt, so the buffer that just finished is
+ * always (g_cur ^ 1). */
+static uint8_t  g_rx_buf[RX_BUFS][PAYLOAD_MAX] __aligned(4);
+static volatile uint8_t  g_cur;
+static volatile bool     g_rx_running;
+
+/* 32 bit capture values are extended to 64 bit by watching for wraps.  A gap
+ * of more than 2^30 us (~18 min) between two address events would be needed
+ * to confuse this. */
+static volatile uint32_t g_cap_last;
+static volatile uint64_t g_cap_high;
+static volatile uint64_t g_isr_ts;        /* timestamp of the packet in flight */
+static volatile uint64_t g_isr_prev_ts;   /* timestamp of the last packet out */
+
+/* Packet ring (single producer = RADIO ISR, single consumer = main thread). */
+struct pkt_entry {
+	uint64_t t_us;
+	uint32_t dt_us;
+	int8_t   rssi;
+	uint8_t  channel;
+	uint8_t  len;
+	uint8_t  data[PAYLOAD_MAX];
+};
+
+static struct pkt_entry g_pkt_ring[PKT_RING_LEN];
+static volatile uint16_t g_ring_head;
+static volatile uint16_t g_ring_tail;
+static volatile uint32_t g_pkt_count;
+static volatile uint32_t g_ring_drops;
+
+/* Last captured frame, kept for 'x' replay. */
+static uint8_t  g_last_frame[PAYLOAD_MAX];
+static uint8_t  g_last_len;
+static uint8_t  g_last_channel;
+static bool     g_have_last;
+
+/* Console output: formatted lines are queued here and trickled into the CDC
+ * ACM UART from the main loop, so a missing/slow host can never block us. */
+static uint8_t        g_tx_area[TX_RING_BYTES];
+static struct ring_buf g_tx_rb;
+static uint32_t       g_tx_drops;
+static uint32_t       g_ring_drops_reported;
+
+static char   g_line[LINE_MAX];
+static size_t g_line_len;
+static bool   g_console_ok;
+
+static const struct device *const console_dev =
+	DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+
+/* Energy scan results ('s'). */
+static uint16_t g_scan_count[CHANNEL_MAX + 1];
+static int8_t   g_scan_max[CHANNEL_MAX + 1];
+
+/* Hop mode ('y'). */
+struct hop_state {
+	bool     active;
+	uint8_t  chan[32];
+	uint8_t  count;
+	uint8_t  idx;
+	uint8_t  fixed_channel;
+	uint32_t dwell_ms;
+	int64_t  last_ms;
+};
+static struct hop_state g_hop;
+
+/* ------------------------------------------------------------------------- */
+/* Small helpers                                                             */
+/* ------------------------------------------------------------------------- */
+
+static uint8_t bitrev8(uint8_t b)
+{
+	b = (uint8_t)(((b & 0xF0u) >> 4) | ((b & 0x0Fu) << 4));
+	b = (uint8_t)(((b & 0xCCu) >> 2) | ((b & 0x33u) << 2));
+	b = (uint8_t)(((b & 0xAAu) >> 1) | ((b & 0x55u) << 1));
+	return b;
+}
+
+static void radio_irq_mask(void)
+{
+	irq_disable(RADIO_IRQn);
+}
+
+static void radio_irq_unmask(void)
+{
+	irq_enable(RADIO_IRQn);
+}
+
+/* Wait for a RADIO event without sleeping; the caller runs in thread context
+ * or during early init.  Returns false on timeout (microseconds). */
+static bool radio_wait_event(nrf_radio_event_t ev, uint32_t timeout_us)
+{
+	while (!nrf_radio_event_check(NRF_RADIO, ev)) {
+		if (timeout_us == 0) {
+			return false;
+		}
+		timeout_us--;
+		k_busy_wait(1);
+	}
+	return true;
+}
+
+static bool radio_wait_disabled(uint32_t timeout_us)
+{
+	while (nrf_radio_state_get(NRF_RADIO) != NRF_RADIO_STATE_DISABLED) {
+		if (timeout_us == 0) {
+			return false;
+		}
+		timeout_us--;
+		k_busy_wait(1);
+	}
+	return true;
+}
+
+/* Read the 1 MHz capture timer from thread context with the RADIO IRQ masked.
+ * CC[0] is normally written by the PPI on every ADDRESS event; an explicit
+ * capture task is used here, so this must not run while a reception is in
+ * progress. */
+static uint64_t timer_capture_now(void)
+{
+	nrf_timer_task_trigger(CAPTURE_TIMER, NRF_TIMER_TASK_CAPTURE0);
+
+	uint32_t cap = CAPTURE_TIMER->CC[0];
+	uint32_t last = g_cap_last;
+
+	if ((cap < last) && ((last - cap) > 0x40000000u)) {
+		g_cap_high += (1ull << 32);
+	}
+	g_cap_last = cap;
+
+	return g_cap_high | cap;
+}
+
+/* ------------------------------------------------------------------------- */
+/* Console output (never blocks, drops and counts when the host is absent)   */
+/* ------------------------------------------------------------------------- */
+
+static void line_reset(void)
+{
+	g_line_len = 0;
+}
+
+static void line_ch(char c)
+{
+	if (g_line_len < sizeof(g_line)) {
+		g_line[g_line_len++] = c;
+	}
+}
+
+static void line_str(const char *s)
+{
+	while (*s != '\0') {
+		line_ch(*s++);
+	}
+}
+
+static void line_u32(uint32_t v)
+{
+	char tmp[10];
+	int i = 0;
+
+	if (v == 0u) {
+		line_ch('0');
+		return;
+	}
+	while (v != 0u) {
+		tmp[i++] = (char)('0' + (v % 10u));
+		v /= 10u;
+	}
+	while (i > 0) {
+		line_ch(tmp[--i]);
+	}
+}
+
+static void line_i32(int32_t v)
+{
+	if (v < 0) {
+		line_ch('-');
+		line_u32((uint32_t)(-(v + 1)) + 1u); /* avoids -INT32_MIN UB */
+	} else {
+		line_u32((uint32_t)v);
+	}
+}
+
+static void line_u64(uint64_t v)
+{
+	char tmp[20];
+	int i = 0;
+
+	if (v == 0u) {
+		line_ch('0');
+		return;
+	}
+	while (v != 0u) {
+		tmp[i++] = (char)('0' + (uint8_t)(v % 10u));
+		v /= 10u;
+	}
+	while (i > 0) {
+		line_ch(tmp[--i]);
+	}
+}
+
+static void line_hex_byte(uint8_t b)
+{
+	static const char hex[] = "0123456789ABCDEF";
+
+	line_ch(hex[b >> 4]);
+	line_ch(hex[b & 0x0Fu]);
+}
+
+static void line_hex(const uint8_t *data, uint16_t len)
+{
+	for (uint16_t i = 0; i < len; i++) {
+		line_hex_byte(data[i]);
+	}
+}
+
+/* Push the assembled line into the software output ring.  A line that does not
+ * fit is dropped whole (a half line would confuse the laptop GUI) and counted,
+ * never waited for. */
+static void line_flush(void)
+{
+	if (ring_buf_space_get(&g_tx_rb) < (uint32_t)g_line_len) {
+		g_tx_drops += (uint32_t)g_line_len;
+		g_line_len = 0;
+		return;
+	}
+	(void)ring_buf_put(&g_tx_rb, (const uint8_t *)g_line, (uint32_t)g_line_len);
+	g_line_len = 0;
+}
+
+static void out_line(const char *s)
+{
+	line_reset();
+	line_str(s);
+	line_str("\r\n");
+	line_flush();
+}
+
+/* Move queued output into the UART as long as it accepts bytes.  Bytes held
+ * back by the UART stay in g_tx_chunk, so nothing is lost or reordered. */
+static void tx_pump(void)
+{
+	static uint8_t chunk[TX_CHUNK_BYTES];
+	static size_t  pos;
+	static size_t  have;
+
+	if (!g_console_ok) {
+		return;
+	}
+
+	for (;;) {
+		if (pos == have) {
+			have = (size_t)ring_buf_get(&g_tx_rb, chunk, sizeof(chunk));
+			pos = 0;
+			if (have == 0u) {
+				return;
+			}
+		}
+		int sent = uart_fifo_fill(console_dev, chunk + pos, (int)(have - pos));
+
+		if (sent <= 0) {
+			return;
+		}
+		pos += (size_t)sent;
+	}
+}
+
+/* ------------------------------------------------------------------------- */
+/* Radio configuration                                                       */
+/* ------------------------------------------------------------------------- */
+
+/* Start the 32 MHz crystal and wait until it is really on.  USB may already
+ * have it running through Zephyr's clock driver, in which case the task is a
+ * no-op and no event is generated. */
+static void hfxo_start(void)
+{
+	bool running = ((NRF_CLOCK->HFCLKSTAT & CLOCK_HFCLKSTAT_STATE_Msk) != 0u) &&
+		       ((NRF_CLOCK->HFCLKSTAT & CLOCK_HFCLKSTAT_SRC_Msk) ==
+			(CLOCK_HFCLKSTAT_SRC_Xtal << CLOCK_HFCLKSTAT_SRC_Pos));
+
+	if (running) {
+		g_hfxo_ok = true;
+		return;
+	}
+
+	nrf_clock_event_clear(NRF_CLOCK, NRF_CLOCK_EVENT_HFCLKSTARTED);
+	nrf_clock_task_trigger(NRF_CLOCK, NRF_CLOCK_TASK_HFCLKSTART);
+	g_hfxo_ok = false;
+	for (int i = 0; i < 20000; i++) { /* up to 20 ms */
+		if (nrf_clock_event_check(NRF_CLOCK, NRF_CLOCK_EVENT_HFCLKSTARTED)) {
+			g_hfxo_ok = true;
+			break;
+		}
+		k_busy_wait(1);
+	}
+}
+
+/* Program BASE0/PREFIX0 from the user supplied on-air address.  See the long
+ * comment at the top of the file for the reasoning behind the default. */
+static void radio_apply_address(void)
+{
+	uint8_t bytes[5];
+	uint32_t base = 0u;
+	uint32_t prefix = 0u;
+	uint8_t balen = (uint8_t)(g_addr_len - 1u);
+
+	for (uint8_t i = 0; i < g_addr_len; i++) {
+		bytes[i] = g_order_rev ? g_addr[g_addr_len - 1u - i] : g_addr[i];
+	}
+	if (g_bit_rev) {
+		for (uint8_t i = 0; i < g_addr_len; i++) {
+			bytes[i] = bitrev8(bytes[i]);
+		}
+	}
+
+	/* First on-air byte -> BASE0[7:0]; the last on-air byte is the prefix. */
+	for (uint8_t i = 0; i < balen; i++) {
+		base |= (uint32_t)bytes[i] << (8u * i);
+	}
+	prefix = (uint32_t)bytes[g_addr_len - 1u];
+
+	nrf_radio_base0_set(NRF_RADIO, base);
+	nrf_radio_prefix0_set(NRF_RADIO, prefix);
+	nrf_radio_rxaddresses_set(NRF_RADIO, 1u << 0); /* logical address 0 */
+	nrf_radio_txaddress_set(NRF_RADIO, 0);
+
+	g_base0_written = base;
+	g_prefix0_written = prefix;
+	g_balen_written = balen;
+}
+
+/* PCNF0/PCNF1: no S0/LENGTH/S1, fixed length payload, no whitening, big endian
+ * (MSB first on air inside each payload byte, i.e. the nRF24 RAW view).
+ * The address bits are always LSBit first regardless of ENDIAN. */
+static void radio_apply_packet_format(uint8_t len)
+{
+	nrf_radio_packet_conf_t conf = {
+		.lflen = 0,
+		.s0len = 0,
+		.s1len = 0,
+		.s1incl = false,
+		.cilen = 0,
+		.plen = NRF_RADIO_PREAMBLE_LENGTH_8BIT,
+		.crcinc = false,
+		.termlen = 0,
+		.maxlen = len,
+		.statlen = len,
+		.balen = (uint8_t)(g_addr_len - 1u),
+		.big_endian = true,
+		.whiteen = false,
+	};
+
+	nrf_radio_packet_configure(NRF_RADIO, &conf);
+
+	/* CRC off, as on the nRF24 sniffer: every address hit ends a packet. */
+	nrf_radio_crc_configure(NRF_RADIO, 0, NRF_RADIO_CRC_ADDR_INCLUDE, 0);
+}
+
+static void radio_apply_frequency(void)
+{
+	/* FREQUENCY is in MHz: 2400 + channel. */
+	nrf_radio_frequency_set(NRF_RADIO, (uint16_t)(2400u + g_channel));
+}
+
+/* Full (re)configuration; the receiver must be stopped. */
+static void radio_configure(void)
+{
+	radio_irq_mask();
+	nrf_radio_mode_set(NRF_RADIO, NRF_RADIO_MODE_NRF_1MBIT);
+	nrf_radio_txpower_set(NRF_RADIO, NRF_RADIO_TXPOWER_0DBM);
+	radio_apply_frequency();
+	radio_apply_packet_format(g_len);
+	radio_apply_address();
+	nrf_radio_shorts_set(NRF_RADIO, 0);
+	nrf_radio_int_enable(NRF_RADIO, RADIO_INT_MASK);
+	radio_irq_unmask();
+}
+
+static void timer_capture_init(void)
+{
+	nrf_timer_task_trigger(CAPTURE_TIMER, NRF_TIMER_TASK_STOP);
+	nrf_timer_mode_set(CAPTURE_TIMER, NRF_TIMER_MODE_TIMER);
+	nrf_timer_bit_width_set(CAPTURE_TIMER, NRF_TIMER_BIT_WIDTH_32);
+	nrf_timer_prescaler_set(CAPTURE_TIMER, CAPTURE_PRESCALE);
+	nrf_timer_task_trigger(CAPTURE_TIMER, NRF_TIMER_TASK_CLEAR);
+	nrf_timer_task_trigger(CAPTURE_TIMER, NRF_TIMER_TASK_START); /* free run */
+
+	/* RADIO EVENTS_ADDRESS -> TIMER1 TASKS_CAPTURE[0].  The capture value is
+	 * read in the ADDRESS interrupt; no timer interrupt is used. */
+	nrf_ppi_channel_endpoint_setup(NRF_PPI, CAPTURE_PPI_CH,
+				       (uint32_t)(uintptr_t)&NRF_RADIO->EVENTS_ADDRESS,
+				       (uint32_t)(uintptr_t)&CAPTURE_TIMER->TASKS_CAPTURE[0]);
+	nrf_ppi_channel_enable(NRF_PPI, CAPTURE_PPI_CH);
+}
+
+/* ------------------------------------------------------------------------- */
+/* RADIO interrupt                                                           */
+/* ------------------------------------------------------------------------- */
+
+/* Copy one finished buffer into the ring.  Runs in the RADIO ISR. */
+static void push_packet(uint8_t idx, uint64_t ts, int8_t rssi)
+{
+	uint16_t next = (uint16_t)((g_ring_head + 1u) % PKT_RING_LEN);
+	uint32_t dt;
+
+	if (next == g_ring_tail) {
+		g_ring_drops++;
+		g_isr_prev_ts = ts;
+		return;
+	}
+
+	dt = (uint32_t)(ts - g_isr_prev_ts);
+	g_pkt_ring[g_ring_head].t_us = ts;
+	g_pkt_ring[g_ring_head].dt_us = dt;
+	g_pkt_ring[g_ring_head].rssi = rssi;
+	g_pkt_ring[g_ring_head].channel = g_channel;
+	g_pkt_ring[g_ring_head].len = g_len;
+	memcpy(g_pkt_ring[g_ring_head].data, g_rx_buf[idx], g_len);
+	g_ring_head = next;
+
+	g_pkt_count++;
+	g_isr_prev_ts = ts;
+}
+
+static void radio_isr(const void *arg)
+{
+	ARG_UNUSED(arg);
+
+	/* END first: if a new ADDRESS is already pending, g_cur has not been
+	 * flipped for it yet, so (g_cur ^ 1) is still the buffer that ended. */
+	if (nrf_radio_event_check(NRF_RADIO, NRF_RADIO_EVENT_END)) {
+		uint8_t done = (uint8_t)(g_cur ^ 1u);
+		int8_t rssi = (int8_t)nrf_radio_rssi_sample_get(NRF_RADIO);
+
+		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+		push_packet(done, g_isr_ts, rssi);
+	}
+
+	if (nrf_radio_event_check(NRF_RADIO, NRF_RADIO_EVENT_ADDRESS)) {
+		uint32_t cap = CAPTURE_TIMER->CC[0]; /* latched by PPI */
+		uint32_t last = g_cap_last;
+
+		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_ADDRESS);
+
+		if ((cap < last) && ((last - cap) > 0x40000000u)) {
+			g_cap_high += (1ull << 32);
+		}
+		g_cap_last = cap;
+		g_isr_ts = g_cap_high | cap;
+
+		/* PACKETPTR is latched by START: hand the *next* reception the
+		 * other buffer, the one in flight keeps writing the old one. */
+		g_cur = (uint8_t)(g_cur ^ 1u);
+		nrf_radio_packetptr_set(NRF_RADIO, g_rx_buf[g_cur]);
+	}
+
+	/* No address match (or an aborted reception) never reaches END; the radio
+	 * aborts into DISABLED, so re-enable reception here.  TASKS_RXEN is only
+	 * valid from the DISABLED state, which is exactly where a pending DISABLED
+	 * event leaves us; READY_START then re-arms the receiver. */
+	if (nrf_radio_event_check(NRF_RADIO, NRF_RADIO_EVENT_DISABLED)) {
+		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+		if (g_rx_running) {
+			nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_RXEN);
+		}
+	}
+}
+
+/* ------------------------------------------------------------------------- */
+/* Capture control                                                           */
+/* ------------------------------------------------------------------------- */
+
+static void radio_start_rx(void)
+{
+	radio_irq_mask();
+
+	/* READY_START ramps up on RXEN and starts automatically, END_START
+	 * re-arms after every good packet, ADDRESS_RSSISTART / DISABLED_RSSISTOP
+	 * bracket the RSSI measurement. */
+	nrf_radio_shorts_set(NRF_RADIO,
+			     NRF_RADIO_SHORT_READY_START_MASK |
+			     NRF_RADIO_SHORT_ADDRESS_RSSISTART_MASK |
+			     NRF_RADIO_SHORT_END_START_MASK |
+			     NRF_RADIO_SHORT_DISABLED_RSSISTOP_MASK);
+
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_READY);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_ADDRESS);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_RSSIEND);
+
+	g_cur = 0;
+	nrf_radio_packetptr_set(NRF_RADIO, g_rx_buf[0]);
+	/* Gives the first packet a real dt instead of its absolute timestamp. */
+	g_isr_prev_ts = timer_capture_now();
+	g_rx_running = true;
+	nrf_radio_int_enable(NRF_RADIO, RADIO_INT_MASK);
+	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_RXEN);
+
+	radio_irq_unmask();
+	g_capturing = true;
+}
+
+static void radio_stop_rx(void)
+{
+	radio_irq_mask();
+
+	g_rx_running = false;
+	g_capturing = false;
+	nrf_radio_shorts_set(NRF_RADIO, 0);
+	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_DISABLE);
+	(void)radio_wait_disabled(1000);
+	/* Drop anything a reception in flight may have latched. */
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_ADDRESS);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+
+	radio_irq_unmask();
+}
+
+/* Change channel without losing more than the packet in flight. */
+static void radio_retune(void)
+{
+	bool was_capturing = g_capturing;
+
+	if (was_capturing) {
+		radio_stop_rx();
+	}
+	radio_irq_mask();
+	radio_apply_frequency();
+	radio_irq_unmask();
+	if (was_capturing) {
+		radio_start_rx();
+	}
+}
+
+/* Re-apply length / address, keeping the capture state. */
+static void radio_reconfigure(void)
+{
+	bool was_capturing = g_capturing;
+
+	if (was_capturing) {
+		radio_stop_rx();
+	}
+	radio_irq_mask();
+	radio_apply_packet_format(g_len);
+	radio_apply_address();
+	radio_apply_frequency();
+	radio_irq_unmask();
+	if (was_capturing) {
+		radio_start_rx();
+	}
+}
+
+/* ------------------------------------------------------------------------- */
+/* Packet printing (main thread)                                             */
+/* ------------------------------------------------------------------------- */
+
+static void print_packet(const struct pkt_entry *p)
+{
+	line_reset();
+	line_str("P ");
+	line_u64(p->t_us);
+	line_str(" dt=");
+	line_u32(p->dt_us);
+	line_str(" ch=");
+	line_u32(p->channel);
+	line_str(" rssi=");
+	line_i32((int32_t)p->rssi);
+	line_str(" RAW ");
+	line_hex(p->data, p->len);
+	line_str(" | REV ");
+	for (uint16_t i = 0; i < p->len; i++) {
+		line_hex_byte(bitrev8(p->data[i]));
+	}
+	line_str("\r\n");
+	line_flush();
+}
+
+/* Drain the packet ring; returns the number of printed lines. */
+static uint16_t drain_packets(uint16_t budget)
+{
+	uint16_t printed = 0;
+
+	while (g_ring_tail != g_ring_head && printed < budget) {
+		const struct pkt_entry *p = &g_pkt_ring[g_ring_tail];
+
+		print_packet(p);
+
+		/* Keep the newest frame for 'x' replay. */
+		g_last_len = p->len;
+		g_last_channel = p->channel;
+		memcpy(g_last_frame, p->data, p->len);
+		g_have_last = true;
+
+		g_ring_tail = (uint16_t)((g_ring_tail + 1u) % PKT_RING_LEN);
+		printed++;
+	}
+
+	return printed;
+}
+
+/* Report lost packets at most a few times per second, so the report itself
+ * cannot swamp the link. */
+static void report_drops(int64_t now_ms)
+{
+	static int64_t last_ms;
+
+	uint32_t lost = g_ring_drops - g_ring_drops_reported;
+
+	if (lost == 0u || (now_ms - last_ms) < 100) {
+		return;
+	}
+	last_ms = now_ms;
+	g_ring_drops_reported = g_ring_drops;
+
+	line_reset();
+	line_str("[drop ");
+	line_u32(lost);
+	line_str("]");
+	line_str("\r\n");
+	line_flush();
+}
+
+/* ------------------------------------------------------------------------- */
+/* Help / configuration dump                                                 */
+/* ------------------------------------------------------------------------- */
+
+static void print_config(void)
+{
+	line_reset();
+	line_str("channel       : ");
+	line_u32(g_channel);
+	line_str(" (");
+	line_u32(2400u + g_channel);
+	line_str(" MHz)\r\n");
+	line_flush();
+
+	line_reset();
+	line_str("payload len   : ");
+	line_u32(g_len);
+	line_str("\r\n");
+	line_flush();
+
+	line_reset();
+	line_str("trigger addr  : ");
+	line_hex(g_addr, g_addr_len);
+	line_str(" (");
+	line_u32(g_addr_len);
+	line_str(" bytes, on-air order)\r\n");
+	line_flush();
+
+	line_reset();
+	line_str("byte order    : ");
+	line_str(g_order_rev ? "reversed\r\n" : "as given\r\n");
+	line_flush();
+
+	line_reset();
+	line_str("bit reversal  : ");
+	line_str(g_bit_rev ? "on\r\n" : "off\r\n");
+	line_flush();
+
+	line_reset();
+	line_str("BALEN         : ");
+	line_u32(g_balen_written);
+	line_str(" (address = BALEN + 1 prefix byte)\r\n");
+	line_flush();
+
+	line_reset();
+	line_str("BASE0         : 0x");
+	for (int shift = 28; shift >= 0; shift -= 4) {
+		line_hex_byte((uint8_t)((g_base0_written >> shift) & 0xFu));
+	}
+	line_str("\r\n");
+	line_flush();
+
+	line_reset();
+	line_str("PREFIX0       : 0x");
+	line_hex_byte((uint8_t)(g_prefix0_written & 0xFFu));
+	line_str(" (AP0, most significant address byte)\r\n");
+	line_flush();
+
+	line_reset();
+	line_str("HFXO          : ");
+	line_str(g_hfxo_ok ? "running\r\n" : "NOT RUNNING\r\n");
+	line_flush();
+
+	line_reset();
+	line_str("capture       : ");
+	line_str(g_capturing ? "on" : "off");
+	line_str(g_hop.active ? " (hopping)\r\n" : "\r\n");
+	line_flush();
+
+	line_reset();
+	line_str("packets       : ");
+	line_u32(g_pkt_count);
+	line_str("\r\n");
+	line_flush();
+
+	line_reset();
+	line_str("ring drops    : ");
+	line_u32(g_ring_drops);
+	line_str("\r\n");
+	line_flush();
+
+	line_reset();
+	line_str("output drops  : ");
+	line_u32(g_tx_drops);
+	line_str(" bytes\r\n");
+	line_flush();
+
+	if (g_hop.active) {
+		line_reset();
+		line_str("hop           : ");
+		line_u32(g_hop.count);
+		line_str(" channels @ ");
+		line_u32(g_hop.dwell_ms);
+		line_str(" ms: ");
+		for (uint8_t i = 0; i < g_hop.count; i++) {
+			if (i != 0u) {
+				line_ch(',');
+			}
+			line_u32(g_hop.chan[i]);
+		}
+		line_str("\r\n");
+		line_flush();
+	}
+}
+
+static void print_help(void)
+{
+	out_line("");
+	out_line("=== chilipad-sniffer (nRF52840 dongle, LT8920 2.4 GHz) ===");
+	out_line("h            help + current config");
+	out_line("p            start/stop capture (starts OFF at boot)");
+	out_line("c<n>         channel 0..100 (default 50 = 2450 MHz)");
+	out_line("l<n>         payload length 1..255 (default 64)");
+	out_line("w<hex>       trigger address, 3..5 bytes on-air order (0B5C8E03)");
+	out_line("             'w' alone resets the address to the default");
+	out_line("o            toggle byte order (as given <-> reversed)");
+	out_line("r            toggle per-byte bit reversal (on by default)");
+	out_line("s<sec>       energy scan ch 0..100 for <sec> s (default 2, max 60)");
+	out_line("y<list>@<ms> hop channels, e.g. y10,30,50,70@200; 'y' stops");
+	out_line("x<n>         replay the last captured frame n times (default 10)");
+	out_line("");
+	print_config();
+}
+
+/* ------------------------------------------------------------------------- */
+/* Energy scan ('s')                                                         */
+/* ------------------------------------------------------------------------- */
+
+static void energy_scan(uint32_t seconds)
+{
+	bool was_capturing = g_capturing;
+	int64_t deadline;
+	uint32_t sweeps = 0;
+
+	if (seconds == 0u) {
+		seconds = 2;
+	}
+	if (seconds > 60u) {
+		seconds = 60;
+	}
+
+	if (was_capturing) {
+		radio_stop_rx();
+	}
+	/* Keep the RADIO interrupt out of the way for the whole sweep: no packet
+	 * pushes, no PACKETPTR games, only RSSI.  INTEN is switched off as well so
+	 * no stale ADDRESS/END event survives the sweep. */
+	radio_irq_mask();
+	nrf_radio_int_disable(NRF_RADIO, RADIO_INT_MASK);
+	nrf_radio_shorts_set(NRF_RADIO, 0);
+
+	memset(g_scan_count, 0, sizeof(g_scan_count));
+	for (uint16_t ch = 0; ch <= CHANNEL_MAX; ch++) {
+		g_scan_max[ch] = -128;
+	}
+
+	line_reset();
+	line_str("[scan] ");
+	line_u32(seconds);
+	line_str(" s RSSI sweep over ch 0..100, press remote buttons...\r\n");
+	line_flush();
+	tx_pump();
+
+	deadline = k_uptime_get() + (int64_t)seconds * 1000;
+
+	while (k_uptime_get() < deadline) {
+		for (uint16_t ch = 0; ch <= CHANNEL_MAX; ch++) {
+			nrf_radio_frequency_set(NRF_RADIO, (uint16_t)(2400u + ch));
+			nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_READY);
+			nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_RSSIEND);
+			nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+
+			/* RXEN ramps up to RXIDLE (READY); RSSISTART/RSSIEND then takes a
+			 * single carrier level sample while nothing is being received. */
+			nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_RXEN);
+			if (!radio_wait_event(NRF_RADIO_EVENT_READY, 200u)) {
+				/* Leave the radio disabled so the next channel can RXEN. */
+				nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_DISABLE);
+				(void)radio_wait_disabled(200);
+				continue;
+			}
+
+			for (int sample = 0; sample < 8; sample++) {
+				nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_RSSIEND);
+				nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_RSSISTART);
+				if (!radio_wait_event(NRF_RADIO_EVENT_RSSIEND, 200u)) {
+					break;
+				}
+
+				int8_t rssi = (int8_t)nrf_radio_rssi_sample_get(NRF_RADIO);
+
+				if (rssi > g_scan_max[ch]) {
+					g_scan_max[ch] = rssi;
+				}
+				if (rssi > -75) {
+					g_scan_count[ch]++;
+				}
+			}
+
+			nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_DISABLE);
+			(void)radio_wait_disabled(200);
+		}
+		sweeps++;
+
+		/* Keep the console alive during long scans. */
+		tx_pump();
+	}
+
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+
+	/* Highest sample count first, at most ten lines.  Printed channels are
+	 * marked with 0xFFFF in the count array instead of being moved. */
+	line_reset();
+	line_str("[scan] ");
+	line_u32(sweeps);
+	line_str(" sweeps; channels with samples above -75 dBm:\r\n");
+	line_flush();
+
+	uint8_t shown = 0;
+
+	for (; shown < 10; shown++) {
+		int best = -1;
+
+		for (uint16_t ch = 0; ch <= CHANNEL_MAX; ch++) {
+			if (g_scan_count[ch] == 0u || g_scan_count[ch] == 0xFFFFu) {
+				continue;
+			}
+			if (best < 0 || g_scan_count[ch] > g_scan_count[best]) {
+				best = (int)ch;
+			}
+		}
+		if (best < 0) {
+			break;
+		}
+
+		line_reset();
+		line_str("  ch ");
+		line_u32((uint32_t)best);
+		line_str(": ");
+		line_u32(g_scan_count[best]);
+		line_str(" samples, max ");
+		line_i32((int32_t)g_scan_max[best]);
+		line_str(" dBm\r\n");
+		line_flush();
+
+		g_scan_count[best] = 0xFFFFu; /* mark as printed */
+	}
+	if (shown == 0u) {
+		out_line("  (nothing above -75 dBm; try longer or a nearer remote)");
+	}
+
+	/* Back to the configured channel and capture state. */
+	radio_apply_frequency();
+	radio_apply_packet_format(g_len);
+	radio_apply_address();
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_ADDRESS);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+	nrf_radio_int_enable(NRF_RADIO, RADIO_INT_MASK);
+	radio_irq_unmask();
+
+	if (was_capturing) {
+		radio_start_rx();
+	}
+}
+
+/* ------------------------------------------------------------------------- */
+/* Replay ('x')                                                              */
+/* ------------------------------------------------------------------------- */
+
+static void replay_frame(uint32_t times)
+{
+	bool was_capturing = g_capturing;
+
+	if (!g_have_last) {
+		out_line("[x] no frame captured yet; press 'p' first");
+		return;
+	}
+	if (times == 0u) {
+		times = 10;
+	}
+	if (times > 1000u) {
+		times = 1000;
+	}
+
+	if (was_capturing) {
+		radio_stop_rx();
+	}
+
+	/* Interrupts stay off for the whole replay: a TX END event must not be
+	 * mistaken for a received packet. */
+	radio_irq_mask();
+	nrf_radio_int_disable(NRF_RADIO, RADIO_INT_MASK);
+
+	/* Same channel, address, length and no CRC as the RX path; only the
+	 * direction changes.  STATLEN/MAXLEN follow the stored frame. */
+	nrf_radio_frequency_set(NRF_RADIO, (uint16_t)(2400u + g_last_channel));
+	radio_apply_packet_format(g_last_len);
+	radio_apply_address();
+	nrf_radio_txaddress_set(NRF_RADIO, 0);
+	nrf_radio_shorts_set(NRF_RADIO, NRF_RADIO_SHORT_READY_START_MASK);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_READY);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+	nrf_radio_packetptr_set(NRF_RADIO, g_last_frame);
+
+	line_reset();
+	line_str("[replay] ch=");
+	line_u32(g_last_channel);
+	line_str(" len=");
+	line_u32(g_last_len);
+	line_str(" addr=");
+	line_hex(g_addr, g_addr_len);
+	line_str(" x");
+	line_u32(times);
+	line_str(" RAW ");
+	line_hex(g_last_frame, g_last_len);
+	line_str("\r\n");
+	line_flush();
+	tx_pump();
+
+	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_TXEN);
+	for (uint32_t i = 0; i < times; i++) {
+		if (i != 0u) {
+			nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_START);
+		}
+		if (!radio_wait_event(NRF_RADIO_EVENT_END, 5000u)) {
+			break;
+		}
+		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+		k_msleep(5); /* ~5 ms between bursts */
+	}
+
+	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_DISABLE);
+	(void)radio_wait_disabled(1000);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+
+	/* Restore the receive configuration. */
+	radio_apply_packet_format(g_len);
+	radio_apply_frequency();
+	nrf_radio_int_enable(NRF_RADIO, RADIO_INT_MASK);
+	radio_irq_unmask();
+
+	if (was_capturing) {
+		radio_start_rx();
+	}
+}
+
+/* ------------------------------------------------------------------------- */
+/* Command parser                                                            */
+/* ------------------------------------------------------------------------- */
+
+static bool parse_u32(const char *s, uint32_t *out)
+{
+	uint32_t value = 0;
+	bool any = false;
+
+	while (*s != '\0') {
+		if (*s < '0' || *s > '9') {
+			return false;
+		}
+		value = value * 10u + (uint32_t)(*s - '0');
+		if (value > 1000000u) {
+			return false; /* keeps the callers' range checks meaningful */
+		}
+		any = true;
+		s++;
+	}
+	if (!any) {
+		return false;
+	}
+	*out = value;
+	return true;
+}
+
+static int hex_nibble(char c)
+{
+	if (c >= '0' && c <= '9') {
+		return c - '0';
+	}
+	if (c >= 'a' && c <= 'f') {
+		return c - 'a' + 10;
+	}
+	if (c >= 'A' && c <= 'F') {
+		return c - 'A' + 10;
+	}
+	return -1;
+}
+
+/* "w<hex>": 3..5 bytes, exactly two hex digits per byte. */
+static bool parse_hex_addr(const char *s, uint8_t *out, uint8_t *out_len)
+{
+	uint8_t bytes[5];
+	uint8_t count = 0;
+
+	while (*s != '\0') {
+		int hi = hex_nibble(s[0]);
+		int lo = (s[1] != '\0') ? hex_nibble(s[1]) : -1;
+
+		if (hi < 0 || lo < 0 || count >= 5) {
+			return false;
+		}
+		bytes[count++] = (uint8_t)((hi << 4) | lo);
+		s += 2;
+	}
+	if (count < 3u || count > 5u) {
+		return false;
+	}
+	memcpy(out, bytes, count);
+	*out_len = count;
+	return true;
+}
+
+static void cmd_set_channel(uint32_t ch)
+{
+	if (ch > CHANNEL_MAX) {
+		out_line("[cfg] channel must be 0..100, unchanged");
+		return;
+	}
+	g_channel = (uint8_t)ch;
+	if (g_hop.active) {
+		g_hop.active = false;
+		out_line("[cfg] hopping stopped (fixed channel selected)");
+	}
+	radio_retune();
+
+	line_reset();
+	line_str("[cfg] channel -> ");
+	line_u32(g_channel);
+	line_str(" (");
+	line_u32(2400u + g_channel);
+	line_str(" MHz)\r\n");
+	line_flush();
+}
+
+static void cmd_set_len(uint32_t len)
+{
+	if (len < 1u || len > PAYLOAD_MAX) {
+		out_line("[cfg] length must be 1..255, unchanged");
+		return;
+	}
+	g_len = (uint8_t)len;
+	radio_reconfigure();
+
+	line_reset();
+	line_str("[cfg] payload length -> ");
+	line_u32(g_len);
+	line_str("\r\n");
+	line_flush();
+}
+
+static void cmd_set_addr(const char *arg)
+{
+	if (*arg == '\0') {
+		static const uint8_t def[DEFAULT_ADDR_LEN] = {0x0B, 0x5C, 0x8E, 0x03};
+
+		memcpy(g_addr, def, sizeof(def));
+		g_addr_len = DEFAULT_ADDR_LEN;
+		radio_reconfigure();
+		out_line("[addr] reset to 0B5C8E03 (4 bytes)");
+	} else {
+		uint8_t bytes[5];
+		uint8_t len;
+
+		if (!parse_hex_addr(arg, bytes, &len)) {
+			out_line("[addr] usage: w<hex> = 3..5 bytes, e.g. w0B5C8E03");
+			return;
+		}
+		memcpy(g_addr, bytes, len);
+		g_addr_len = len;
+		radio_reconfigure();
+
+		line_reset();
+		line_str("[addr] trigger ");
+		line_hex(g_addr, g_addr_len);
+		line_str(" (");
+		line_u32(g_addr_len);
+		line_str(" bytes)\r\n");
+		line_flush();
+	}
+
+	line_reset();
+	line_str("[addr] BALEN=");
+	line_u32(g_balen_written);
+	line_str(" BASE0=0x");
+	for (int shift = 28; shift >= 0; shift -= 4) {
+		line_hex_byte((uint8_t)((g_base0_written >> shift) & 0xFu));
+	}
+	line_str(" PREFIX0=0x");
+	line_hex_byte((uint8_t)(g_prefix0_written & 0xFFu));
+	line_str("\r\n");
+	line_flush();
+}
+
+static void cmd_hop(const char *arg)
+{
+	uint8_t  chan[32];
+	uint8_t  count = 0;
+	uint32_t dwell = 200;
+	const char *p = arg;
+
+	if (*p == '\0') {
+		if (g_hop.active) {
+			g_hop.active = false;
+			g_channel = g_hop.fixed_channel;
+			radio_retune();
+			out_line("[hop] stopped, back to the fixed channel");
+		} else {
+			out_line("[hop] not hopping; usage: y10,30,50,70@200");
+		}
+		return;
+	}
+
+	while (*p != '\0' && *p != '@') {
+		uint32_t value = 0;
+		bool any = false;
+
+		while (*p >= '0' && *p <= '9') {
+			value = value * 10u + (uint32_t)(*p - '0');
+			any = true;
+			p++;
+		}
+		if (!any || value > CHANNEL_MAX || count >= 32u) {
+			out_line("[hop] bad list; usage: y10,30,50,70@200 (ch 0..100)");
+			return;
+		}
+		chan[count++] = (uint8_t)value;
+		if (*p == ',') {
+			p++;
+		} else if (*p != '\0' && *p != '@') {
+			out_line("[hop] bad list; usage: y10,30,50,70@200 (ch 0..100)");
+			return;
+		}
+	}
+	if (count == 0u) {
+		out_line("[hop] empty list; usage: y10,30,50,70@200");
+		return;
+	}
+	if (*p == '@') {
+		if (!parse_u32(p + 1, &dwell) || dwell < 5u || dwell > 10000u) {
+			out_line("[hop] dwell must be 5..10000 ms; usage: y10,30@200");
+			return;
+		}
+	}
+
+	memcpy(g_hop.chan, chan, count);
+	g_hop.count = count;
+	g_hop.dwell_ms = dwell;
+	g_hop.idx = 0;
+	g_hop.fixed_channel = g_channel;
+	g_hop.last_ms = k_uptime_get();
+	g_hop.active = true;
+	g_channel = chan[0];
+	radio_retune();
+
+	line_reset();
+	line_str("[hop] ");
+	line_u32(count);
+	line_str(" channels @ ");
+	line_u32(dwell);
+	line_str(" ms, starting on ch ");
+	line_u32(g_channel);
+	line_str("\r\n");
+	line_flush();
+}
+
+static void handle_command(const char *cmd)
+{
+	char letter = cmd[0];
+	const char *arg = cmd + 1;
+	uint32_t num = 0;
+	bool has_num = parse_u32(arg, &num);
+
+	switch (letter) {
+	case 'h':
+		print_help();
+		break;
+
+	case 'p':
+		if (g_capturing) {
+			radio_stop_rx();
+			out_line("[cap] capture OFF");
+			if (g_hop.active) {
+				g_hop.active = false;
+				out_line("[hop] hopping stopped");
+			}
+		} else {
+			radio_start_rx();
+			out_line("[cap] capture ON");
+			if (g_hop.active) {
+				g_hop.idx = 0;
+				g_hop.last_ms = k_uptime_get();
+			}
+		}
+		break;
+
+	case 'c':
+		if (has_num) {
+			cmd_set_channel(num);
+		} else {
+			out_line("[cfg] usage: c<n>, n = 0..100");
+		}
+		break;
+
+	case 'l':
+		if (has_num) {
+			cmd_set_len(num);
+		} else {
+			out_line("[cfg] usage: l<n>, n = 1..255");
+		}
+		break;
+
+	case 'w':
+		cmd_set_addr(arg);
+		break;
+
+	case 'o':
+		g_order_rev = !g_order_rev;
+		radio_reconfigure();
+		line_reset();
+		line_str("[addr] byte order -> ");
+		line_str(g_order_rev ? "reversed\r\n" : "as given\r\n");
+		line_flush();
+		break;
+
+	case 'r':
+		g_bit_rev = !g_bit_rev;
+		radio_reconfigure();
+		line_reset();
+		line_str("[addr] bit reversal -> ");
+		line_str(g_bit_rev ? "on\r\n" : "off\r\n");
+		line_flush();
+		break;
+
+	case 's':
+		energy_scan(has_num ? num : 0u);
+		break;
+
+	case 'y':
+		cmd_hop(arg);
+		break;
+
+	case 'x':
+		replay_frame(has_num ? num : 0u);
+		break;
+
+	case '\0':
+		break;
+
+	default:
+		line_reset();
+		line_str("[?] unknown command '");
+		line_ch(letter);
+		line_str("' ('h' for help)\r\n");
+		line_flush();
+		break;
+	}
+}
+
+/* ------------------------------------------------------------------------- */
+/* Main                                                                      */
+/* ------------------------------------------------------------------------- */
+
+static void poll_console_input(void)
+{
+	static char    buf[32];
+	static uint8_t buf_len;
+	unsigned char  c;
+
+	while (uart_poll_in(console_dev, &c) == 0) {
+		if (c == (unsigned char)'\r' || c == (unsigned char)'\n') {
+			if (buf_len > 0u) {
+				buf[buf_len] = '\0';
+				handle_command(buf);
+				buf_len = 0;
+			}
+			continue;
+		}
+		if (buf_len < sizeof(buf) - 1u) {
+			buf[buf_len++] = (char)c;
+		}
+	}
+}
+
+int main(void)
+{
+	ring_buf_init(&g_tx_rb, (uint32_t)sizeof(g_tx_area), g_tx_area);
+
+	hfxo_start();
+	timer_capture_init();
+
+	IRQ_CONNECT(RADIO_IRQn, 0, radio_isr, NULL, 0);
+	irq_enable(RADIO_IRQn);
+
+	/* Configure the radio but leave the receiver off: capture always starts
+	 * in the OFF state ('p' enables it). */
+	radio_configure();
+
+	g_console_ok = device_is_ready(console_dev);
+	if (g_console_ok) {
+		out_line("[ok] chilipad-sniffer ready, capture OFF - send 'h' for help");
+	}
+
+	while (true) {
+		if (!g_console_ok) {
+			/* The CDC ACM UART is initialised by the board at boot; retry in
+			 * case USB enumeration comes up late. */
+			g_console_ok = device_is_ready(console_dev);
+		}
+
+		tx_pump();
+		if (g_console_ok) {
+			poll_console_input();
+		}
+
+		int64_t now_ms = k_uptime_get();
+
+		/* Hop mode: advance the channel list. */
+		if (g_hop.active && g_capturing &&
+		    (now_ms - g_hop.last_ms) >= (int64_t)g_hop.dwell_ms) {
+			g_hop.idx = (uint8_t)((g_hop.idx + 1u) % g_hop.count);
+			g_channel = g_hop.chan[g_hop.idx];
+			g_hop.last_ms = now_ms;
+			radio_retune();
+		}
+
+		if (g_capturing) {
+			(void)drain_packets(16);
+			report_drops(now_ms);
+		}
+
+		k_msleep(1);
+	}
+
+	return 0;
+}
