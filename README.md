@@ -17,8 +17,8 @@ Bursts last ~2.4 ms and repeat while a button is held.
 |---------------|-------------------|------------------------------------------|
 | GND           | GND               |                                          |
 | VCC           | 3V3               | **10 µF capacitor across VCC↔GND** — the nRF24 brown-outs without it, especially at PA_MAX |
-| CE            | D2 (GPIO4)        |                                          |
-| CSN           | D8 (GPIO15)       |                                          |
+| CE            | D8 (GPIO15)       |                                          |
+| CSN           | D2 (GPIO4)        |                                          |
 | SCK           | D5 (GPIO14)       |                                          |
 | MOSI          | D7 (GPIO13)       |                                          |
 | MISO          | D6 (GPIO12)       |                                          |

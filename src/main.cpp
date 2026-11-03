@@ -28,8 +28,8 @@
 // Hardware / radio configuration
 // ---------------------------------------------------------------------------
 
-static const uint8_t PIN_CE  = D2;  // GPIO4
-static const uint8_t PIN_CSN = D8;  // GPIO15 (D5/D6/D7 are the SPI bus)
+static const uint8_t PIN_CE  = D8;  // GPIO15 (board pull-down keeps radio idle at boot)
+static const uint8_t PIN_CSN = D2;  // GPIO4  (D5/D6/D7 are the SPI bus)
 
 static const uint8_t REG_SETUP_AW   = 0x03;  // address width
 static const uint8_t REG_RX_ADDR_P0 = 0x0A;  // pipe 0 RX address
@@ -472,7 +472,7 @@ void setup() {
     } else {
       Serial.println(F(
           "[err] nRF24L01+ not responding.\r\n"
-          "      Check wiring (CE=D2/GPIO4, CSN=D8/GPIO15, SCK=D5, MOSI=D7,\r\n"
+          "      Check wiring (CE=D8/GPIO15, CSN=D2/GPIO4, SCK=D5, MOSI=D7,\r\n"
           "      MISO=D6) and add a 10 uF capacitor across VCC/GND on the\r\n"
           "      nRF24 module (brown-out resets the radio at PA_MAX).\r\n"
           "      Retrying in 2 s..."));
