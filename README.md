@@ -46,7 +46,7 @@ menu and current config at any time.
 | `h`      | help + current config (channel, address variant, SETUP_AW readback, `isChipConnected()`) |
 | `s`      | 2-second channel scan using `testRPD()` carrier detect; press remote buttons during it; prints per-channel hits and the top 5 |
 | `c<n>`   | set channel 0..125 (default 50 = 2450 MHz) |
-| `a`      | cycle address variant: `AAAA`, `5555`, `00AA`, `0055` |
+| `a`      | cycle address variant: `AAAA`, `5555`, `00AA`, `0055`, `AA00`, `5500` (bytes listed in register LSByte-first order; try all orientations) |
 | `p`      | start/stop promiscuous capture. Each packet prints `<millis> RAW <32 bytes hex> \| REV <bit-reversed hex>` |
 | `t`      | top 10 most frequent 8-byte prefixes of REV frames (real frames share the sync word, so it dominates noise) |
 | `z`      | clear the prefix table |
@@ -66,8 +66,9 @@ menu and current config at any time.
 3. **Spot the sync word.** Send `t`. Frames that started at the preamble share
    the same leading bytes in REV view — the 8-byte prefix that dominates the
    count is preamble+sync-word material. The real frames form a tight cluster;
-   random noise frames scatter. If `AAAA` doesn't cluster well, press `a` to
-   try `5555` / `00AA` / `0055` and capture again.
+   random noise frames scatter. Try `a` to cycle through `AAAA`, `5555`,
+   `00AA`, `0055`, `AA00`, `5500` (both byte orientations of the trigger are
+   included since the on-air bit order is unverified) and capture again.
 4. **Inspect candidates.** Use `f<hex>` (e.g. `fAAAAAA55`) to print only the
    frames containing a candidate byte run and compare REV lines across
    different buttons: the 64-bit sync word stays constant; the payload (first

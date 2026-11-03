@@ -40,17 +40,23 @@ static const uint8_t AW_2BYTE  = 0x00;       // SETUP_AW value: "illegal" 2-byte
 
 // Address variants cycled with 'a'. The nRF24 matches these bytes against the
 // MSB-first bitstream. 0xAA/0x55 are the preamble patterns themselves; the
-// 0x00,AA / 0x00,55 variants sometimes trigger better when noise precedes the
-// preamble (leading zero parks the correlator).
-static const uint8_t NUM_ADDR_VARIANTS = 4;
+// variants with a leading 0x00 sometimes trigger better when noise precedes
+// the preamble (leading zero parks the correlator).
+// NOTE: each pair is listed in REGISTER write order (nRF24 multi-byte
+// registers are written LSByte first). The on-air bit order relative to this
+// intent is unverified, so both orientations (00AA/AA00, 0055/5500) exist —
+// cycle with 'a' and use whichever clusters real frames in 't'.
+static const uint8_t NUM_ADDR_VARIANTS = 6;
 static const uint8_t ADDR_VARIANTS[NUM_ADDR_VARIANTS][2] = {
     {0xAA, 0xAA},  // 0: "AAAA"
     {0x55, 0x55},  // 1: "5555"
     {0x00, 0xAA},  // 2: "00AA"
     {0x00, 0x55},  // 3: "0055"
+    {0xAA, 0x00},  // 4: "AA00"
+    {0x55, 0x00},  // 5: "5500"
 };
 static const char *ADDR_VARIANT_NAMES[NUM_ADDR_VARIANTS] = {
-    "AAAA", "5555", "00AA", "0055",
+    "AAAA", "5555", "00AA", "0055", "AA00", "5500",
 };
 
 // ---------------------------------------------------------------------------
@@ -85,6 +91,9 @@ public:
     SPI.endTransaction();
   }
   uint8_t rawReadReg(uint8_t reg) { return read_register(reg); }
+  void rawReadRegBuf(uint8_t reg, uint8_t *buf, uint8_t len) {
+    read_register(reg, buf, len);
+  }
 };
 
 static RawRF24 radio(PIN_CE, PIN_CSN);
@@ -105,8 +114,8 @@ static uint8_t  g_lastRaw[FIXED_LEN];
 static uint8_t  g_filter[8];
 static uint8_t  g_filterLen = 0;
 
-// Frequency table for 't': 8-byte prefixes of REV frames, fixed 64 entries,
-// least-count eviction. No heap growth.
+// 't' table: 8-byte prefixes of the REV (bit-reversed) view, fixed 64
+// entries, least-count eviction. No heap growth.
 static const uint8_t PREFIX_TABLE_SIZE = 64;
 struct PrefixEntry {
   uint8_t   bytes[8];
@@ -176,13 +185,47 @@ static void applyRxConfig() {
   radio.setPayloadSize(FIXED_LEN);
   radio.setCRCLength(RF24_CRC_DISABLED);
   radio.closeReadingPipe(1);            // only pipe 0 stays open
-  radio.openReadingPipe(0, 0ULL);       // open pipe 0; address set raw below
-  forcePromiscuousAddress();            // re-apply the trick afterwards
+
+  // RF24 (>=1.6) caches pipe-0 addresses and re-writes RX_ADDR_P0 itself:
+  //   * startListening(): write_register(RX_ADDR_P0, pipe0_reading_address)
+  //   * stopListening():  write_register(RX_ADDR_P0, pipe0_writing_address)
+  // If the caches hold anything but our trigger bytes, every RX/TX switch
+  // overwrites the trigger address with junk. So open pipe 0 with a 5-byte
+  // buffer whose first 2 bytes are our trigger: the register is physically 5
+  // bytes and with SETUP_AW=0 only the low 2 bytes are matched, so the
+  // trailing zeros are harmless — and both RF24 caches now agree with us.
+  uint8_t buf5[5] = { ADDR_VARIANTS[g_addrVariant][0],
+                      ADDR_VARIANTS[g_addrVariant][1], 0, 0, 0 };
+  radio.openWritingPipe(buf5);   // cache pipe0_writing_address + TX_ADDR
+  radio.openReadingPipe(0, buf5);  // cache pipe0_reading_address
+
+  // Now apply the actual promiscuous trick (SETUP_AW=0) and re-program the
+  // low 2 register bytes ourselves while CE is low (standby: W_REGISTER is
+  // legal here, unlike after startListening()).
+  forcePromiscuousAddress();
   radio.flush_rx();
-  Serial.printf("[cfg] ch=%u variant=%s SETUP_AW=0x%02X len=%u CRC=off "
-                "ack=off\r\n",
+
+  // Debug readback (read-only, legal in any state): show the trigger address
+  // actually on the chip next to the SETUP_AW readback.
+  uint8_t p0rb[2];
+  radio.rawReadRegBuf(REG_RX_ADDR_P0, p0rb, 2);
+  Serial.printf("[cfg] ch=%u variant=%s SETUP_AW=0x%02X "
+                "RX_ADDR_P0=%02X:%02X len=%u CRC=off ack=off\r\n",
                 g_channel, ADDR_VARIANT_NAMES[g_addrVariant], g_lastAWReadback,
-                FIXED_LEN);
+                p0rb[0], p0rb[1], FIXED_LEN);
+}
+
+// Route ALL radio.startListening() calls through here. startListening()
+// restores RX_ADDR_P0 from RF24's pipe0_reading_address cache (which now
+// holds our trigger bytes); afterwards we can only READ the chip, so print
+// the on-chip trigger address + SETUP_AW readback once per config change.
+static void startRx() {
+  radio.startListening();
+  uint8_t p0rb[2];
+  radio.rawReadRegBuf(REG_RX_ADDR_P0, p0rb, 2);
+  g_lastAWReadback = radio.rawReadReg(REG_SETUP_AW) & 0x03;
+  Serial.printf("[rx] SETUP_AW=0x%02X RX_ADDR_P0=%02X:%02X (on chip)\r\n",
+                g_lastAWReadback, p0rb[0], p0rb[1]);
 }
 
 static void printConfig() {
@@ -207,7 +250,7 @@ static void printHelp() {
       "h      help + current config\r\n"
       "s      channel scan (2 s, testRPD carrier detect; press remote keys)\r\n"
       "c<n>   set channel 0..125 (default 50 = 2450 MHz)\r\n"
-      "a      cycle address variant: AAAA, 5555, 00AA, 0055\r\n"
+      "a      cycle address variant: AAAA, 5555, 00AA, 0055, AA00, 5500\r\n"
       "p      start/stop promiscuous capture (RAW + bit-reversed REV lines)\r\n"
       "t      top 10 most frequent 8-byte prefixes of REV frames\r\n"
       "z      clear the prefix table\r\n"
@@ -223,7 +266,12 @@ static void printHelp() {
 
 static void prefixTableClear() { memset(g_prefixTable, 0, sizeof(g_prefixTable)); }
 
-static void prefixTableAdd(const uint8_t *rev) {
+static void prefixTableAdd(const uint8_t *raw) {
+  // The table and 't' output document REV prefixes: bit-reverse the first 8
+  // bytes before storing/counting.
+  uint8_t rev[8];
+  for (uint8_t i = 0; i < 8; i++) rev[i] = bitReverse8(raw[i]);
+
   // Match existing entry.
   for (uint8_t i = 0; i < PREFIX_TABLE_SIZE; i++) {
     if (g_prefixTable[i].count != 0 &&
@@ -310,7 +358,7 @@ static void channelScan() {
   static uint16_t hits[126];
   memset(hits, 0, sizeof(hits));
 
-  radio.startListening();
+  startRx();
   unsigned long start = millis();
   uint32_t sweeps = 0;
   while (millis() - start < DURATION_MS) {
@@ -363,7 +411,7 @@ static void channelScan() {
   Serial.println();
   // Restore the configured channel / RX state.
   applyRxConfig();
-  if (g_capturing) radio.startListening();
+  if (g_capturing) startRx();
 }
 
 // ---------------------------------------------------------------------------
@@ -381,6 +429,13 @@ static void replayFrame(uint16_t times) {
                 ADDR_VARIANT_NAMES[g_addrVariant], times);
   radio.stopListening();
   radio.flush_tx();
+  // Give RF24's pipe0_writing_address cache our trigger bytes first, so its
+  // own TX-side register writes (openWritingPipe writes RX_ADDR_P0/TX_ADDR at
+  // cached addr_width) land on our leading 2 bytes. Then apply SETUP_AW=0 and
+  // the raw 2-byte register writes while CE is low (standby).
+  uint8_t buf5[5] = { ADDR_VARIANTS[g_addrVariant][0],
+                      ADDR_VARIANTS[g_addrVariant][1], 0, 0, 0 };
+  radio.openWritingPipe(buf5);
   forcePromiscuousTxAddress();  // 2-byte TX address, AW=0, CRC/ack already off
   for (uint16_t i = 0; i < times; i++) {
     radio.write(g_lastRaw, FIXED_LEN, true);  // no-ack write
@@ -394,7 +449,7 @@ static void replayFrame(uint16_t times) {
 
   // Return to RX if capture was active.
   applyRxConfig();
-  if (wasCapturing) radio.startListening();
+  if (wasCapturing) startRx();
 }
 
 // ---------------------------------------------------------------------------
@@ -460,7 +515,7 @@ static void handleCommand(const char *cmd) {
       if (num >= 0 && num <= 125) {
         g_channel = (uint8_t)num;
         applyRxConfig();
-        if (g_capturing) radio.startListening();
+        if (g_capturing) startRx();
         Serial.printf("[cfg] channel -> %u (%.3f GHz)\r\n", g_channel,
                       2.400 + g_channel * 0.001);
       } else {
@@ -472,15 +527,15 @@ static void handleCommand(const char *cmd) {
     case 'a':
       g_addrVariant = (g_addrVariant + 1) % NUM_ADDR_VARIANTS;
       applyRxConfig();
-      if (g_capturing) radio.startListening();
+      if (g_capturing) startRx();
       Serial.printf("[cfg] address variant -> %s\r\n",
-                    ADDR_VARIANTS[g_addrVariant]);
+                    ADDR_VARIANT_NAMES[g_addrVariant]);
       break;
 
     case 'p':
       g_capturing = !g_capturing;
       if (g_capturing) {
-        radio.startListening();
+        startRx();
         Serial.println(F("[cap] capture ON"));
       } else {
         radio.stopListening();
@@ -576,7 +631,8 @@ void loop() {
       memcpy(g_lastRaw, raw, FIXED_LEN);
       g_haveLastRaw = true;
 
-      prefixTableAdd(raw);  // table counts everything; filter only gates prints
+      prefixTableAdd(raw);  // counts REV prefixes of everything captured;
+                            // the 'f' filter only gates printing
 
       if (frameMatchesFilter(raw)) printFrame(raw, millis());
       if (++drained >= 16) { yield(); drained = 0; }
