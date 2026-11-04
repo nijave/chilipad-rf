@@ -53,6 +53,15 @@ def parse_args() -> argparse.Namespace:
         default=str(Path.home() / "chilipad-rf" / "captures"),
         help="capture output directory",
     )
+    p.add_argument("--duration", default="30", help="capture length in seconds")
+    p.add_argument("--note", default="", help="note saved in meta.txt")
+    for key in ("esp", "nrf"):
+        p.add_argument(
+            f"--{key}-start",
+            default="p",
+            help="start commands; 'cmd@sec' sends cmd sec seconds after zero",
+        )
+        p.add_argument(f"--{key}-stop", default="p", help="stop commands")
     p.add_argument("--selftest", action="store_true", help=argparse.SUPPRESS)
     return p.parse_args()
 
@@ -245,7 +254,7 @@ class App:
         self.stop_e: dict[str, tk.Entry] = {}
         for i, key in enumerate(("esp", "nrf")):
             self.start_e[key] = self._field(
-                c, 1, i * 2, f"{key.upper()} start cmds", "p", 10
+                c, 1, i * 2, f"{key.upper()} start cmds", "p", 24
             )
             self.stop_e[key] = self._field(
                 c, 1, i * 2 + 2, f"{key.upper()} stop cmds", "p", 10
@@ -327,8 +336,23 @@ class App:
         self._set_bg(REC_BG)
         self.clock_txt = "+0.0"
         for dev in self.devices:
-            for i, cmd in enumerate(self.start_e[dev.key].get().split()):
-                self.root.after(i * 100, lambda d=dev, c=cmd: d.send(c))
+            self._schedule(dev, self.start_e[dev.key].get())
+
+    def _schedule(self, dev: Device, cmds: str) -> None:
+        """Send space-separated commands 100 ms apart; 'cmd@sec' runs at sec."""
+        for i, tok in enumerate(cmds.split()):
+            cmd, _, at = tok.partition("@")
+            try:
+                ms = int(float(at) * 1000) if at else i * 100
+            except ValueError:
+                ms = i * 100
+            self.root.after(ms, lambda d=dev, c=cmd, m=ms: self._send(d, c, m))
+
+    def _send(self, dev: Device, cmd: str, ms: int) -> None:
+        if self.state not in ("recording", "stopping"):
+            return
+        dev.send(cmd)
+        self._event(f"{time.monotonic() - self.t0:+.6f} {dev.key} cmd {cmd}")
 
     def stop_capture(self, reason: str) -> None:
         if self.state == "preroll":
@@ -453,6 +477,13 @@ def main() -> None:
     root = tk.Tk()
     devices = [Device("esp", args.esp), Device("nrf", args.nrf)]
     app = App(root, devices, Path(args.out).expanduser(), args.selftest)
+    fields = [(app.dur_e, args.duration), (app.note_e, args.note)]
+    for key in ("esp", "nrf"):
+        fields.append((app.start_e[key], getattr(args, f"{key}_start")))
+        fields.append((app.stop_e[key], getattr(args, f"{key}_stop")))
+    for entry, value in fields:
+        entry.delete(0, "end")
+        entry.insert(0, value)
     if args.selftest:
         app.dur_e.delete(0, "end")
         app.dur_e.insert(0, "2")
