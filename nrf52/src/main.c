@@ -159,6 +159,19 @@ static uint8_t  g_last_len;
 static uint8_t  g_last_channel;
 static bool     g_have_last;
 
+/* Loaded TX payload segments for 'z' ('t1<hex>', 't2<hex>'); length 0 means
+ * empty.  Each segment goes out as preamble + 'w' address + payload. */
+#define TX_SEGS 2
+static uint8_t  g_tx_seg[TX_SEGS][PAYLOAD_MAX] __aligned(4);
+static uint8_t  g_tx_seg_len[TX_SEGS];
+
+/* TX counters (totals since boot, shown by 'd'). */
+static uint32_t g_tx_ready_total;        /* READY events seen in TX */
+static uint32_t g_tx_end_total;          /* END events seen in TX */
+static uint32_t g_tx_timeout_total;      /* timed-out TX event waits */
+static int32_t  g_tx_gap_us;             /* last measured 'z' seg1->seg2 gap */
+static bool     g_tx_gap_valid;
+
 /* Console output: formatted lines are queued here and trickled into the CDC
  * ACM UART from the main loop, so a missing/slow host can never block us. */
 static uint8_t        g_tx_area[TX_RING_BYTES];
@@ -235,6 +248,27 @@ static bool radio_wait_disabled(uint32_t timeout_us)
 		k_busy_wait(1);
 	}
 	return true;
+}
+
+/* Tight-poll a RADIO event for the TX paths that need low reaction latency.
+ * The timeout is checked against the kernel cycle counter only every 32 polls,
+ * so one poll is a single register read.  Safe with interrupts locked.
+ * Returns false on timeout (microseconds, ~31 us resolution). */
+static bool radio_spin_event(nrf_radio_event_t ev, uint32_t timeout_us)
+{
+	uint32_t start = k_cycle_get_32();
+	uint32_t limit = k_us_to_cyc_ceil32(timeout_us) + 1u;
+
+	while (true) {
+		for (int i = 0; i < 32; i++) {
+			if (nrf_radio_event_check(NRF_RADIO, ev)) {
+				return true;
+			}
+		}
+		if ((k_cycle_get_32() - start) > limit) {
+			return nrf_radio_event_check(NRF_RADIO, ev);
+		}
+	}
 }
 
 /* Read the 1 MHz capture timer from thread context with the RADIO IRQ masked.
@@ -860,6 +894,22 @@ static void print_config(void)
 	line_str(" bytes\r\n");
 	line_flush();
 
+	for (uint8_t s = 0; s < TX_SEGS; s++) {
+		line_reset();
+		line_str("tx seg");
+		line_u32(s + 1u);
+		line_str("       : ");
+		if (g_tx_seg_len[s] == 0u) {
+			line_str("empty\r\n");
+		} else {
+			line_u32(g_tx_seg_len[s]);
+			line_str(" bytes ");
+			line_hex(g_tx_seg[s], g_tx_seg_len[s]);
+			line_str("\r\n");
+		}
+		line_flush();
+	}
+
 	if (g_hop.active) {
 		line_reset();
 		line_str("hop           : ");
@@ -893,6 +943,13 @@ static void print_help(void)
 	out_line("s<sec>       energy scan ch 0..100 for <sec> s (default 2, max 60)");
 	out_line("y<list>@<ms> hop channels, e.g. y10,30,50,70@200; 'y' stops");
 	out_line("x<n>         replay the last captured frame n times (default 10)");
+	out_line("t<hex>       load TX segment 1 (up to 255 bytes); same as t1<hex>");
+	out_line("t1<hex>      load TX segment 1; 't1' alone clears it");
+	out_line("t2<hex>      load TX segment 2; 't2' alone clears it");
+	out_line("             't' alone clears both segments");
+	out_line("z<n>         send seg1 (+ seg2 back-to-back) n times, 1..1000");
+	out_line("             (default 1), each seg = preamble + 'w' addr + payload");
+	out_line("d            radio register dump + ISR and TX counters");
 	out_line("");
 	print_config();
 }
@@ -1023,6 +1080,34 @@ static void energy_scan(uint32_t seconds)
 /* Replay ('x')                                                              */
 /* ------------------------------------------------------------------------- */
 
+/* Back to the receive configuration after a TX run ('x' / 'z'). */
+static void radio_tx_restore_rx(bool was_capturing)
+{
+	radio_apply_packet_format(g_len);
+	radio_apply_frequency();
+	nrf_radio_int_enable(NRF_RADIO, RADIO_INT_MASK);
+	radio_irq_unmask();
+
+	if (was_capturing) {
+		radio_start_rx();
+	}
+}
+
+/* "[tx] sent=<n> segs=<m> timeouts=<k>": complete frames/bursts, segment END
+ * events and timed-out event waits of the run that just finished. */
+static void print_tx_summary(uint32_t sent, uint32_t segs, uint32_t timeouts)
+{
+	line_reset();
+	line_str("[tx] sent=");
+	line_u32(sent);
+	line_str(" segs=");
+	line_u32(segs);
+	line_str(" timeouts=");
+	line_u32(timeouts);
+	line_str("\r\n");
+	line_flush();
+}
+
 static void replay_frame(uint32_t times)
 {
 	bool was_capturing = g_capturing;
@@ -1073,17 +1158,30 @@ static void replay_frame(uint32_t times)
 	line_flush();
 	tx_pump();
 
+	uint32_t sent = 0;
+	uint32_t timeouts = 0;
+
 	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_TXEN);
-	for (uint32_t i = 0; i < times; i++) {
-		if (i != 0u) {
-			nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_START);
+	if (radio_wait_event(NRF_RADIO_EVENT_READY, 1000u)) {
+		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_READY);
+		g_tx_ready_total++;
+		for (uint32_t i = 0; i < times; i++) {
+			if (i != 0u) {
+				nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_START);
+			}
+			if (!radio_wait_event(NRF_RADIO_EVENT_END, 5000u)) {
+				timeouts++;
+				break;
+			}
+			nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+			g_tx_end_total++;
+			sent++;
+			k_msleep(5); /* ~5 ms between bursts */
 		}
-		if (!radio_wait_event(NRF_RADIO_EVENT_END, 5000u)) {
-			break;
-		}
-		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
-		k_msleep(5); /* ~5 ms between bursts */
+	} else {
+		timeouts++;
 	}
+	g_tx_timeout_total += timeouts;
 
 	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_DISABLE);
 	(void)radio_wait_disabled(1000);
@@ -1091,13 +1189,230 @@ static void replay_frame(uint32_t times)
 	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
 
 	/* Restore the receive configuration. */
-	radio_apply_packet_format(g_len);
-	radio_apply_frequency();
-	nrf_radio_int_enable(NRF_RADIO, RADIO_INT_MASK);
-	radio_irq_unmask();
+	radio_tx_restore_rx(was_capturing);
+	print_tx_summary(sent, sent, timeouts);
+}
+
+/* ------------------------------------------------------------------------- */
+/* Segment transmit ('t' / 'z')                                              */
+/* ------------------------------------------------------------------------- */
+
+/* Disable the radio after a 'z' repetition (or an aborted one) and drop every
+ * event it may have latched. */
+static void radio_tx_disable(void)
+{
+	nrf_radio_shorts_set(NRF_RADIO, 0);
+	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_DISABLE);
+	(void)radio_wait_disabled(1000);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_READY);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_ADDRESS);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+}
+
+/* One repetition of the loaded segments.  Returns the number of segments
+ * whose END was seen; *timeouts counts failed event waits.
+ *
+ * Equal lengths (or one segment): READY_START | END_START.  PACKETPTR is
+ * double buffered and latched by START, so it is pointed at segment 2 after
+ * segment 1's ADDRESS event; the END_START short then starts segment 2 in
+ * hardware with no CPU in the path.  END_START is removed after segment 1's
+ * END, long before segment 2 can end (it lasts at least preamble + address).
+ *
+ * Different lengths: PCNF1.MAXLEN/STATLEN must change between the segments.
+ * The nRF52840 PS documents PACKETPTR as double buffered but says nothing of
+ * the kind for PCNF1, and an END_START short fires START on the same event,
+ * so there is no window to rewrite PCNF1 in between.  Instead END is polled
+ * with all interrupts locked, PCNF1 is rewritten in TXIDLE and START is
+ * triggered by the CPU: a few CPU cycles of extra gap. */
+static uint8_t tx_one_burst(uint32_t pcnf1_1, uint32_t pcnf1_2, bool two,
+			    bool hw_chain, uint32_t *timeouts)
+{
+	uint8_t len1 = g_tx_seg_len[0];
+	uint8_t segs = 0;
+	uint32_t cap1;
+	unsigned int key = 0;
+	bool locked = false;
+
+	NRF_RADIO->PCNF1 = pcnf1_1;
+	nrf_radio_packetptr_set(NRF_RADIO, g_tx_seg[0]);
+	nrf_radio_shorts_set(NRF_RADIO, NRF_RADIO_SHORT_READY_START_MASK |
+			     (hw_chain ? NRF_RADIO_SHORT_END_START_MASK : 0u));
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_READY);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_ADDRESS);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+
+	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_TXEN);
+	if (!radio_spin_event(NRF_RADIO_EVENT_READY, 1000u)) {
+		goto timeout;
+	}
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_READY);
+	g_tx_ready_total++;
+
+	if (two) {
+		/* From here to segment 1's END nothing may delay the CPU: the
+		 * PACKETPTR switch must land before END (a 1 byte segment 1 leaves
+		 * 8 us), and the CPU chain path starts segment 2 itself.  At most
+		 * preamble + address + 255 bytes, ~2.1 ms. */
+		key = irq_lock();
+		locked = true;
+	}
+
+	if (!radio_spin_event(NRF_RADIO_EVENT_ADDRESS, 1000u)) {
+		goto timeout;
+	}
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_ADDRESS);
+	cap1 = CAPTURE_TIMER->CC[0]; /* PPI: ADDRESS -> CAPTURE[0] */
+
+	if (two) {
+		/* Segment 1 is on air and its PACKETPTR is latched. */
+		nrf_radio_packetptr_set(NRF_RADIO, g_tx_seg[1]);
+	}
+
+	if (!radio_spin_event(NRF_RADIO_EVENT_END, (uint32_t)len1 * 8u + 1000u)) {
+		goto timeout;
+	}
+	if (two && !hw_chain) {
+		NRF_RADIO->PCNF1 = pcnf1_2;
+		nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_START);
+	}
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+	nrf_radio_shorts_set(NRF_RADIO, 0);
+	segs++;
+	g_tx_end_total++;
+
+	if (locked) {
+		irq_unlock(key);
+		locked = false;
+	}
+
+	if (two) {
+		uint8_t len2 = g_tx_seg_len[1];
+
+		if (!radio_spin_event(NRF_RADIO_EVENT_ADDRESS, 1000u)) {
+			goto timeout;
+		}
+		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_ADDRESS);
+
+		/* ADDRESS -> ADDRESS spacing minus the nominal air time of
+		 * segment 1's payload + segment 2's preamble and address
+		 * (8 us per byte at 1 Mbit) is the extra gap. */
+		uint32_t nominal = ((uint32_t)len1 + 1u + g_addr_len) * 8u;
+
+		g_tx_gap_us = (int32_t)(CAPTURE_TIMER->CC[0] - cap1) -
+			      (int32_t)nominal;
+		g_tx_gap_valid = true;
+
+		if (!radio_spin_event(NRF_RADIO_EVENT_END,
+				      (uint32_t)len2 * 8u + 1000u)) {
+			goto timeout;
+		}
+		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+		segs++;
+		g_tx_end_total++;
+	}
+
+	radio_tx_disable();
+	return segs;
+
+timeout:
+	if (locked) {
+		irq_unlock(key);
+	}
+	(*timeouts)++;
+	radio_tx_disable();
+	return segs;
+}
+
+static void tx_segments(uint32_t times)
+{
+	bool was_capturing = g_capturing;
+	bool two = (g_tx_seg_len[1] != 0u);
+	bool hw_chain;
+	uint32_t pcnf1_1;
+	uint32_t pcnf1_2;
+	uint32_t sent = 0;
+	uint32_t segs = 0;
+	uint32_t timeouts = 0;
+
+	if (g_tx_seg_len[0] == 0u) {
+		out_line("[z] segment 1 is empty; load it with t<hex> or t1<hex>");
+		return;
+	}
+	if (times == 0u) {
+		times = 1;
+	}
+	if (times > 1000u) {
+		times = 1000;
+	}
+	hw_chain = two && (g_tx_seg_len[0] == g_tx_seg_len[1]);
+	g_tx_gap_valid = false;
 
 	if (was_capturing) {
-		radio_start_rx();
+		radio_stop_rx();
+	}
+
+	/* As in replay: RADIO interrupt off for the whole run so a TX event is
+	 * never taken for a received packet. */
+	radio_irq_mask();
+	nrf_radio_int_disable(NRF_RADIO, RADIO_INT_MASK);
+
+	radio_apply_frequency();
+	radio_apply_packet_format(g_tx_seg_len[0]);
+	radio_apply_address();
+	nrf_radio_txaddress_set(NRF_RADIO, 0);
+
+	pcnf1_1 = NRF_RADIO->PCNF1;
+	pcnf1_2 = pcnf1_1;
+	if (two) {
+		pcnf1_2 = (pcnf1_1 & ~(RADIO_PCNF1_MAXLEN_Msk | RADIO_PCNF1_STATLEN_Msk)) |
+			  ((uint32_t)g_tx_seg_len[1] << RADIO_PCNF1_MAXLEN_Pos) |
+			  ((uint32_t)g_tx_seg_len[1] << RADIO_PCNF1_STATLEN_Pos);
+	}
+
+	line_reset();
+	line_str("[z] ch=");
+	line_u32(g_channel);
+	line_str(" addr=");
+	line_hex(g_addr, g_addr_len);
+	line_str(" len1=");
+	line_u32(g_tx_seg_len[0]);
+	if (two) {
+		line_str(" len2=");
+		line_u32(g_tx_seg_len[1]);
+		line_str(hw_chain ? " chain=END_START" : " chain=cpu");
+	}
+	line_str(" x");
+	line_u32(times);
+	line_str("\r\n");
+	line_flush();
+	tx_pump();
+
+	for (uint32_t i = 0; i < times; i++) {
+		uint32_t to = 0;
+		uint8_t done = tx_one_burst(pcnf1_1, pcnf1_2, two, hw_chain, &to);
+
+		segs += done;
+		timeouts += to;
+		if (to != 0u) {
+			break;
+		}
+		sent++;
+		if (i + 1u < times) {
+			k_msleep(5); /* ~5 ms between bursts, radio disabled */
+		}
+	}
+	g_tx_timeout_total += timeouts;
+
+	radio_tx_restore_rx(was_capturing);
+	print_tx_summary(sent, segs, timeouts);
+	if (two && g_tx_gap_valid && sent != 0u) {
+		line_reset();
+		line_str("[z] seg gap=");
+		line_i32(g_tx_gap_us);
+		line_str(" us beyond preamble+address (TIMER1, +/-1 us)\r\n");
+		line_flush();
 	}
 }
 
@@ -1247,6 +1562,71 @@ static void cmd_set_addr(const char *arg)
 	line_flush();
 }
 
+/* "t[1|2][<hex>]".  A segment selector is present when the argument has an odd
+ * number of characters and starts with '1' or '2' (the payload itself is
+ * always an even number of hex digits).  So "t12AB" loads segment 1 = 12 AB
+ * (even length, no selector), "t112AB" loads the same with an explicit
+ * selector, and "t212AB" loads segment 2 = 12 AB. */
+static void cmd_tx_load(const char *arg)
+{
+	size_t n = strlen(arg);
+	uint8_t seg = 0;
+	uint8_t count = 0;
+	static uint8_t bytes[PAYLOAD_MAX];
+
+	if (n == 0u) {
+		g_tx_seg_len[0] = 0;
+		g_tx_seg_len[1] = 0;
+		out_line("[t] both segments cleared");
+		return;
+	}
+	if ((n & 1u) != 0u) {
+		if (arg[0] != '1' && arg[0] != '2') {
+			out_line("[t] usage: t[1|2]<hex>, even number of hex digits");
+			return;
+		}
+		seg = (uint8_t)(arg[0] - '1');
+		arg++;
+		n--;
+	}
+	if (n == 0u) {
+		g_tx_seg_len[seg] = 0;
+		line_reset();
+		line_str("[t] seg");
+		line_u32(seg + 1u);
+		line_str(" cleared\r\n");
+		line_flush();
+		return;
+	}
+	if (n > 2u * PAYLOAD_MAX) {
+		out_line("[t] too long: at most 255 bytes (510 hex digits)");
+		return;
+	}
+	while (*arg != '\0') {
+		int hi = hex_nibble(arg[0]);
+		int lo = hex_nibble(arg[1]);
+
+		if (hi < 0 || lo < 0) {
+			out_line("[t] bad hex digit; segment unchanged");
+			return;
+		}
+		bytes[count++] = (uint8_t)((hi << 4) | lo);
+		arg += 2;
+	}
+	memcpy(g_tx_seg[seg], bytes, count);
+	g_tx_seg_len[seg] = count;
+
+	line_reset();
+	line_str("[t] seg");
+	line_u32(seg + 1u);
+	line_str(" len=");
+	line_u32(count);
+	line_ch(' ');
+	line_hex(g_tx_seg[seg], count);
+	line_str("\r\n");
+	line_flush();
+}
+
 static void cmd_hop(const char *arg)
 {
 	uint8_t  chan[32];
@@ -1374,6 +1754,21 @@ static void handle_command(const char *cmd)
 		line_u32((uint32_t)irq_is_enabled(RADIO_IRQn));
 		line_str("\r\n");
 		line_flush();
+		line_reset();
+		line_str("[d] tx ready=");
+		line_u32(g_tx_ready_total);
+		line_str(" end=");
+		line_u32(g_tx_end_total);
+		line_str(" timeouts=");
+		line_u32(g_tx_timeout_total);
+		line_str(" last_gap_us=");
+		if (g_tx_gap_valid) {
+			line_i32(g_tx_gap_us);
+		} else {
+			line_str("n/a");
+		}
+		line_str("\r\n");
+		line_flush();
 		break;
 	}
 
@@ -1449,6 +1844,18 @@ static void handle_command(const char *cmd)
 		replay_frame(has_num ? num : 0u);
 		break;
 
+	case 't':
+		cmd_tx_load(arg);
+		break;
+
+	case 'z':
+		if (*arg != '\0' && !has_num) {
+			out_line("[z] usage: z<n>, n = 1..1000 (default 1)");
+			break;
+		}
+		tx_segments(has_num ? num : 0u);
+		break;
+
 	case '\0':
 		break;
 
@@ -1466,23 +1873,34 @@ static void handle_command(const char *cmd)
 /* Main                                                                      */
 /* ------------------------------------------------------------------------- */
 
+/* Longest command: "t1" + 510 hex digits = 512 characters.  The CDC ACM RX
+ * FIFO is 1 kB (rx-fifo-size default) and the driver stops accepting USB OUT
+ * data while it is full, so a long line is not lost between 1 ms polls. */
+#define CMD_MAX 600
+
 static void poll_console_input(void)
 {
-	static char    buf[32];
-	static uint8_t buf_len;
-	unsigned char  c;
+	static char     buf[CMD_MAX + 1];
+	static uint16_t buf_len;
+	static bool     overflow;
+	unsigned char   c;
 
 	while (uart_poll_in(console_dev, &c) == 0) {
 		if (c == (unsigned char)'\r' || c == (unsigned char)'\n') {
-			if (buf_len > 0u) {
+			if (overflow) {
+				out_line("[?] command line too long, ignored");
+			} else if (buf_len > 0u) {
 				buf[buf_len] = '\0';
 				handle_command(buf);
-				buf_len = 0;
 			}
+			buf_len = 0;
+			overflow = false;
 			continue;
 		}
-		if (buf_len < sizeof(buf) - 1u) {
+		if (buf_len < CMD_MAX) {
 			buf[buf_len++] = (char)c;
+		} else {
+			overflow = true;
 		}
 	}
 }

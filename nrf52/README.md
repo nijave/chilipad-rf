@@ -56,7 +56,12 @@ it with any serial terminal, 115200 baud (the CDC ACM baud rate is ignored).
 | `r` | flip per-byte bit reversal (on by default); re-applies the address, keeps capturing |
 | `s<sec>` | energy scan of ch 0..100 for `<sec>` seconds (default 2, max 60), then the top 10 channels by number of RSSI samples above -75 dBm; restores the previous channel and capture state |
 | `y<list>@<ms>` | hop the receiver through a channel list, `<ms>` dwell per channel, e.g. `y10,30,50,70@200`. `y` alone stops hopping and returns to the fixed channel |
-| `x<n>` | transmit the last captured buffer `n` times (default 10, 5 ms apart) on the channel it was received on, same address/length/no CRC; then restore the previous state |
+| `x<n>` | send the last captured buffer `n` times (default 10, 5 ms apart) on its receive channel, same address/length/no CRC; then restore the previous state and print `[tx] sent=<n> segs=<n> timeouts=<k>` |
+| `t<hex>` / `t1<hex>` | load TX segment 1: 1..255 bytes, two hex digits per byte (up to 510 digits). `t1` alone clears segment 1 |
+| `t2<hex>` | load TX segment 2 (same rules). `t2` alone clears segment 2 |
+| `t` | clear both TX segments |
+| `z<n>` | send the loaded segments `n` times (default 1, max 1000, 5 ms apart, radio disabled between bursts) on the current channel `c`; segment 2 follows segment 1 back to back (see below); then restore the previous state and print `[tx] sent=<n> segs=<m> timeouts=<k>` |
+| `d` | radio register dump, ISR counters, and TX totals `[d] tx ready=<n> end=<n> timeouts=<n> last_gap_us=<n>` |
 
 Output is one line per packet:
 
@@ -74,6 +79,80 @@ If the packet ring in the firmware fills up faster than the USB link drains it,
 `[drop n]` lines are printed (rate limited) and the totals appear in `h`.
 Output never blocks: when no host is reading, lines are dropped and counted in
 `output drops`.
+
+## Transmitting a long burst (`t` / `z`)
+
+One nRF52 packet carries at most 255 payload bytes after the address. The
+remote's real burst is about 300 bytes, so `z` can send it as two packets
+back to back. Each segment goes out as:
+
+```
+preamble (1 byte) + address (the current `w` address) + payload
+```
+
+The address uses the same byte order and bit reversal (`o`, `r`) as receive
+and `x`. Payload bytes are in the RAW view (MSBit first), the same as the
+`RAW` field of a `P` line. CRC is off.
+
+Segment 2 also starts with a preamble and the `w` address. To build the two
+segments from a captured burst:
+
+1. Find an occurrence of the address bytes inside the burst, at a point that
+   puts at most 255 bytes on each side.
+2. Segment 1 = the bytes from the end of the leading address up to (but not
+   including) that occurrence. Load it with `t<hex>`.
+3. Segment 2 = the bytes after that occurrence. **Do not include the 4 address
+   bytes**: the radio sends them itself. Load it with `t2<hex>`.
+
+The only difference on air from the original burst is one extra preamble byte
+(8 µs) in front of the second address, plus the gap below.
+
+Selector rule for `t`: the payload always has an even number of hex digits,
+so the firmware reads a leading `1` or `2` as a selector only when the
+argument length is odd.
+`t12AB` loads segment 1 = `12 AB`; `t112AB` is the same; `t212AB` loads
+segment 2 = `12 AB`. The command line holds up to 600 characters; the
+firmware ignores a longer line and prints `[?] command line too long`.
+
+### Inter-segment gap
+
+* **Equal lengths** (`len1 == len2`): `SHORTS = READY_START | END_START`.
+  `PACKETPTR` is double buffered (latched by `START`, as stated in the nRF52840
+  PS), so the firmware points it at segment 2 right after segment 1's `ADDRESS`
+  event.
+  The `END_START` short then starts segment 2 in hardware from `TXIDLE`, with
+  no `DISABLE` and no CPU in the path. Expect a gap of 0 µs.
+* **Different lengths**: `PCNF1.MAXLEN/STATLEN` must change between the
+  segments. The PS does not say that `PCNF1` is double buffered, and
+  `END_START` fires `START` on the same event, so there is no time to rewrite
+  `PCNF1` between `END` and a short-triggered `START`. In this case the
+  firmware locks all interrupts from `READY` to segment 1's `END` (about
+  2.1 ms at most; the equal-length path does the same), polls `END`,
+  writes `PCNF1` while the radio is in `TXIDLE` and triggers `START` from the
+  CPU. Expect a gap of about 1 µs (a few CPU cycles). During that gap the
+  radio is in `TXIDLE` and sends the `MODECNF0.DTX` default (carrier). Writing
+  `PCNF1` in `TXIDLE` is not described in the PS; check the result with a
+  receiver.
+
+  To use the hardware path when segment 2 is shorter, append filler bytes to
+  segment 2 so the lengths match. The filler goes on air after the burst.
+
+After every `z` with two segments, the firmware prints
+`[z] seg gap=<n> us`. This is the spacing between the two `ADDRESS` events
+(captured by `TIMER1` through PPI) minus the nominal air time of segment 1's
+payload plus segment 2's preamble and address. Resolution is 1 µs. `d` shows
+the last value as `last_gap_us`.
+
+### TX counters
+
+`[tx] sent=<n> segs=<m> timeouts=<k>` follows every `x` and `z`:
+
+* `sent`: frames (`x`) or complete bursts (`z`) that reached their last `END`;
+* `segs`: `END` events of the run (for `x` it equals `sent`);
+* `timeouts`: event waits (`READY`, `ADDRESS`, `END`) that timed out. A run
+  stops at its first timeout.
+
+`d` shows the totals since boot (`READY` and `END` events, timeouts).
 
 ## Address mapping (and the `o` / `r` toggles)
 
@@ -122,5 +201,5 @@ receivers.
 
 ## Scope
 
-Own hardware, own signal. Obey local RF law; transmitting (`x`) is limited to
-replaying a frame you captured.
+Own hardware, own signal. Obey local RF law; use `x` and `z` only to
+replay frames you captured from your own device.
