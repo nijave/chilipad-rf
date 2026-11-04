@@ -25,9 +25,10 @@
  * is truncated "from the least significant byte if PCNF1.BALEN is less than
  * 4".  So for a 4 byte address A B C D (on-air order):
  *
- *   BASE0[7:0]   = A      (first byte on air)
- *   BASE0[15:8]  = B
- *   BASE0[23:16] = C
+ *   BASE0[7:0]   = unused (truncated away because BALEN = 3)
+ *   BASE0[15:8]  = A      (first byte on air)
+ *   BASE0[23:16] = B
+ *   BASE0[31:24] = C
  *   PREFIX0.AP0  = D      (last byte on air), BALEN = 3
  *
  * The byte order therefore needs no fiddling: first on-air byte -> lowest
@@ -448,9 +449,12 @@ static void radio_apply_address(void)
 		}
 	}
 
-	/* First on-air byte -> BASE0[7:0]; the last on-air byte is the prefix. */
+	/* The radio drops BASE0's low bytes when BALEN < 4 ("truncated from the
+	 * least significant byte"), so the used base bytes sit at the top:
+	 * first on-air byte -> lowest *used* byte, i.e. BASE0 byte (4 - BALEN).
+	 * The last on-air byte is the prefix.  Matches Nordic ESB's addr_conv(). */
 	for (uint8_t i = 0; i < balen; i++) {
-		base |= (uint32_t)bytes[i] << (8u * i);
+		base |= (uint32_t)bytes[i] << (8u * (i + 4u - balen));
 	}
 	prefix = (uint32_t)bytes[g_addr_len - 1u];
 
