@@ -1,0 +1,57 @@
+== A.p1 (632F4BBAC1BEC54D62B8, 80 bits): 2 hits
+   20261104-172417 nrf t=   16.457 rssi=-45 trig=AAAAAA bit 24 err 0 
+   20261104-172417 nrf t=   18.556 rssi=-45 trig=AAAAAA bit 28 err 0 
+== A.p2 (632F4BBEC1A7A94D, 64 bits): 2 hits
+   20261104-172417 nrf t=   16.457 rssi=-45 trig=AAAAAA bit 255 err 0 
+   20261104-172417 nrf t=   18.556 rssi=-45 trig=AAAAAA bit 258 err 0 
+== B (03486457DA26DDCA871C, 80 bits): 2 hits
+   20261104-172417 nrf t=   22.714 rssi=-63 trig=AAAAAA bit 24 err 0 
+   20261104-172417 nrf t=   26.076 rssi=-63 trig=AAAAAA bit 24 err 0 
+== C13 (3EA3A30D200622C02078, 80 bits): 1 hits
+   20261104-172417 nrf t=   13.745 rssi=-64 trig=AAAAAA bit 24 err 0 
+== C57 (E4A2A60AF60D6DD98A56, 80 bits): 1 hits
+   20261104-172417 nrf t=   57.719 rssi=-55 trig=AAAAAA bit 24 err 0 
+== X (BCCF8ED681DFB775, 64 bits): 1 hits
+   20261103-202434 nrf t=   21.051 rssi=-54 trig=555555 bit 104 err 0 
+== Y (AB5F181C3CF736DD, 64 bits): 2 hits
+   20261103-202434 nrf t=   21.051 rssi=-54 trig=555555 bit 168 err 0 
+   20261104-162759 esp t=    5.495 rssi=None trig=CAB08893 bit 35 err 7 
+== Z (679BD7B836E669B1, 64 bits): 1 hits
+   20261103-202434 nrf t=   21.051 rssi=-54 trig=555555 bit 232 err 0 
+== D (AF5567D7, 32 bits): 33 hits
+   20261103-195123 esp t=   35.314 rssi=None trig=038E5C0B bit 187 err 3 inv
+   20261103-202434 nrf t=   12.196 rssi=-73 trig=AAAAAA bit 31 err 0 
+   20261103-202434 nrf t=   22.378 rssi=-72 trig=555555 bit 24 err 0 
+   20261103-202434 nrf t=   23.296 rssi=-73 trig=555555 bit 24 err 0 
+   20261103-202434 nrf t=   23.726 rssi=-72 trig=555555 bit 26 err 0 
+   20261103-202434 nrf t=   24.652 rssi=-72 trig=555555 bit 26 err 0 
+   20261103-202434 nrf t=   25.575 rssi=-73 trig=555555 bit 24 err 0 
+   20261103-202434 nrf t=   29.776 rssi=-71 trig=555555 bit 28 err 0 
+   20261103-202434 nrf t=   40.378 rssi=-70 trig=555555 bit 28 err 2 
+   20261103-202434 esp t=    0.965 rssi=None trig=AAAA bit 121 err 3 
+   20261103-202434 esp t=    3.425 rssi=None trig=AAAA bit 28 err 3 
+   20261103-202434 esp t=    5.517 rssi=None trig=AAAA bit 200 err 3 
+   20261103-202434 esp t=    6.614 rssi=None trig=AAAA bit 223 err 3 inv
+   20261103-202434 esp t=    7.125 rssi=None trig=AAAA bit 121 err 3 
+   20261103-202434 esp t=    7.824 rssi=None trig=AAAA bit 131 err 3 inv
+   20261103-202434 esp t=    7.991 rssi=None trig=AAAA bit 71 err 3 
+   20261103-202434 esp t=    9.254 rssi=None trig=AAAA bit 106 err 3 
+   20261103-202434 esp t=    9.598 rssi=None trig=AAAA bit 5 err 3 
+   20261103-202434 esp t=   10.553 rssi=None trig=AAAA bit 19 err 3 
+   20261103-202434 esp t=   12.402 rssi=None trig=AAAA bit 193 err 3 
+   20261103-202434 esp t=   16.166 rssi=None trig=AAAA bit 56 err 3 
+   20261103-202434 esp t=   16.191 rssi=None trig=AAAA bit 182 err 3 
+   20261103-202434 esp t=   22.004 rssi=None trig=AAAA bit 122 err 3 
+   20261103-202434 esp t=   23.892 rssi=None trig=AAAA bit 43 err 3 inv
+   20261103-202434 esp t=   26.265 rssi=None trig=AAAA bit 31 err 3 
+   20261103-202434 esp t=   28.125 rssi=None trig=AAAA bit 26 err 3 
+   20261103-202434 esp t=   33.304 rssi=None trig=AAAA bit 144 err 3 inv
+   20261103-202434 esp t=   34.133 rssi=None trig=AAAA bit 104 err 3 inv
+   20261103-202434 esp t=   34.501 rssi=None trig=AAAA bit 55 err 3 
+   20261103-202434 esp t=   38.365 rssi=None trig=AAAA bit 173 err 3 
+   20261103-202434 esp t=   38.889 rssi=None trig=AAAA bit 48 err 2 inv
+   20261103-202434 esp t=   40.775 rssi=None trig=AAAA bit 183 err 3 inv
+   20261104-172417 nrf t=   39.673 rssi=-80 trig=AAAAAA bit 25 err 2 
+== SPARSE (30020808011A0C420034001030C80810, 128 bits): 2 hits
+   20261103-202434 nrf t=    1.753 rssi=-46 trig=AAAAAA bit 80 err 0 
+   20261103-202434 nrf t=    9.823 rssi=-39 trig=AAAAAA bit 79 err 3 

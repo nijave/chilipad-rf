@@ -1,0 +1,256 @@
+A1   t=16.457 rssi=-45 bits=2064
+     AAAAAA632F4BBAC1BEC54D62B81220832025312A50320A06821C37F017EA9554
+A2   t=18.556 rssi=-45 bits=2064
+     AAAAAAA632F4BBAC1BEC54D62B83602EE459115262EA0E572C98E17E01FEAAAA
+B1   t=22.714 rssi=-63 bits=2064
+     AAAAAA03486457DA26DDCA871C7FFFE3FE0056270610922FCB113361980281FC
+B2   t=26.076 rssi=-63 bits=2064
+     AAAAAA03486457DA26DDCA871C0FC01FF1F8AEA7338961230226A15A27E9F007
+C13  t=13.745 rssi=-64 bits=2064
+     AAAAAA3EA3A30D200622C020784888C98DA4D7E38F223B5B1780A1E91E424764
+C57  t=57.719 rssi=-55 bits=2064
+     AAAAAAE4A2A60AF60D6DD98A56A1B8C019A9128515451F047E845FCBB1A92329
+SP   t=7.982 rssi=-45 bits=2064
+     AAAAAA9388B0CAD019F2E6B52BE101838EE2C9A4717A73025C45161388B0CAD0
+SPARSE t=1.753 rssi=-46 bits=536
+     AAAAAAAAAAAAA000000030020808011A0C420034001030C80810060606200180
+SPARSE2 t=9.823 rssi=-39 bits=536
+     AAAAAAAAAAAAA0000000600410100238108400680020619010200C0C0C400200
+X    t=21.051 rssi=-54 bits=536
+     5555557FFFFFFFFFFFFD555555BCCF8ED681DFB775AB5F181C3CF736DD679BD7
+
+== pairwise alignment (longest exact common bit run, any offset) ==
+  A1-A2        longest run  106 bits  at A1[0] / A2[4]
+  A1-A2 inv    longest run   24 bits  at A1[0] / A2[3]
+  A1-A2 rev    longest run   28 bits  at A1[497] / A2[1424]
+  A1-A2 revinv longest run   24 bits  at A1[0] / A2[2040]
+  A1-B1        longest run   25 bits  at A1[0] / B1[0]
+  A1-B1 inv    longest run   23 bits  at A1[0] / B1[1]
+  A1-B1 rev    longest run   26 bits  at A1[784] / B1[1523]
+  A1-B1 revinv longest run   24 bits  at A1[0] / B1[2040]
+  A1-B2        longest run   25 bits  at A1[0] / B2[0]
+  A1-B2 inv    longest run   23 bits  at A1[0] / B2[1]
+  A1-B2 rev    longest run   23 bits  at A1[0] / B2[2041]
+  A1-B2 revinv longest run   24 bits  at A1[0] / B2[2040]
+  A1-C13        longest run   25 bits  at A1[553] / C13[1396]
+  A1-C13 inv    longest run   23 bits  at A1[0] / C13[1]
+  A1-C13 rev    longest run   23 bits  at A1[0] / C13[2041]
+  A1-C13 revinv longest run   24 bits  at A1[0] / C13[2040]
+  A1-C57        longest run   24 bits  at A1[0] / C57[0]
+  A1-C57 inv    longest run   25 bits  at A1[0] / C57[1]
+  A1-C57 rev    longest run   25 bits  at A1[503] / C57[295]
+  A1-C57 revinv longest run   24 bits  at A1[0] / C57[2040]
+  A2-B1        longest run   25 bits  at A2[4] / B1[0]
+  A2-B1 inv    longest run   24 bits  at A2[1] / B1[0]
+  A2-B1 rev    longest run   24 bits  at A2[1] / B1[2040]
+  A2-B1 revinv longest run   26 bits  at A2[232] / B1[2034]
+  A2-B2        longest run   30 bits  at A2[2006] / B2[1223]
+  A2-B2 inv    longest run   24 bits  at A2[1] / B2[0]
+  A2-B2 rev    longest run   27 bits  at A2[1745] / B2[539]
+  A2-B2 revinv longest run   26 bits  at A2[232] / B2[2034]
+  A2-C13        longest run   25 bits  at A2[4] / C13[0]
+  A2-C13 inv    longest run   24 bits  at A2[1] / C13[0]
+  A2-C13 rev    longest run   24 bits  at A2[1] / C13[2040]
+  A2-C13 revinv longest run   24 bits  at A2[0] / C13[2040]
+  A2-C57        longest run   25 bits  at A2[0] / C57[0]
+  A2-C57 inv    longest run   26 bits  at A2[3] / C57[0]
+  A2-C57 rev    longest run   28 bits  at A2[1232] / C57[1465]
+  A2-C57 revinv longest run   25 bits  at A2[1] / C57[2039]
+  B1-B2        longest run  105 bits  at B1[0] / B2[0]
+  B1-B2 inv    longest run   23 bits  at B1[0] / B2[1]
+  B1-B2 rev    longest run   27 bits  at B1[117] / B2[1923]
+  B1-B2 revinv longest run   24 bits  at B1[0] / B2[2040]
+  B1-C13        longest run   26 bits  at B1[0] / C13[0]
+  B1-C13 inv    longest run   23 bits  at B1[0] / C13[1]
+  B1-C13 rev    longest run   23 bits  at B1[0] / C13[2041]
+  B1-C13 revinv longest run   24 bits  at B1[0] / C13[2040]
+  B1-C57        longest run   24 bits  at B1[0] / C57[0]
+  B1-C57 inv    longest run   26 bits  at B1[0] / C57[1]
+  B1-C57 rev    longest run   24 bits  at B1[0] / C57[2039]
+  B1-C57 revinv longest run   24 bits  at B1[0] / C57[2040]
+  B2-C13        longest run   26 bits  at B2[0] / C13[0]
+  B2-C13 inv    longest run   23 bits  at B2[0] / C13[1]
+  B2-C13 rev    longest run   24 bits  at B2[295] / C13[191]
+  B2-C13 revinv longest run   24 bits  at B2[0] / C13[2040]
+  B2-C57        longest run   24 bits  at B2[0] / C57[0]
+  B2-C57 inv    longest run   26 bits  at B2[0] / C57[1]
+  B2-C57 rev    longest run   24 bits  at B2[0] / C57[2039]
+  B2-C57 revinv longest run   24 bits  at B2[0] / C57[2040]
+  C13-C57        longest run   24 bits  at C13[0] / C57[0]
+  C13-C57 inv    longest run   28 bits  at C13[0] / C57[1]
+  C13-C57 rev    longest run   24 bits  at C13[0] / C57[2039]
+  C13-C57 revinv longest run   24 bits  at C13[0] / C57[2040]
+  (chance: longest exact common run of two random 2064-bit strings is ~19-23 bits; the max over these 60 comparisons is expected near 26)
+
+== A vs B: 96-bit prefix (after the AAAAAA trigger) at all 8 shifts ==
+  A1[24:104] vs B1 plain : min Hamming 25/80 at bit 236
+  A1[24:104] vs B1 inv   : min Hamming 25/80 at bit 360
+  A1[24:104] vs B1 rev   : min Hamming 25/80 at bit 989
+  A1[24:104] vs B1 revinv: min Hamming 26/80 at bit 328
+  (chance: min Hamming of 80 random bits over ~2000 offsets is 23-26)
+
+== within-family common prefix ==
+  A1 vs A2<<4: identical for 106 bits incl. 24-bit trigger (82 bits after trigger); first diff at bit 106
+   agreement/64 per 64-bit window after prefix: [36, 41, 30, 36, 37, 31, 36, 34, 40, 36, 35, 43, 31, 42, 42, 39, 35, 43, 33, 43, 36, 36, 34, 40, 37, 42, 41, 38, 40, 36]
+  B1 vs B2<<0: identical for 105 bits incl. 24-bit trigger (81 bits after trigger); first diff at bit 105
+   agreement/64 per 64-bit window after prefix: [29, 28, 23, 25, 37, 34, 29, 33, 38, 31, 34, 32, 35, 34, 34, 38, 33, 29, 44, 29, 37, 35, 28, 37, 28, 26, 33, 35, 34, 37]
+
+== run-length histograms (bits at 1 Mbit) ==
+  SP 0:2064    runs=1025 mean=2.01 P(1)=0.44 frac(len%4==0)=0.04  >20:0
+      1:500 2:269 3:147 4:40 5:27 6:16 7:21 8:4 9:1
+  A1 24:520    runs= 237 mean=2.07 P(1)=0.38 frac(len%4==0)=0.04  >20:0
+      1:133 2:50 3:20 4:7 5:12 6:7 7:4 8:2 11:1 12:1
+  A1 520:2064  runs= 681 mean=2.26 P(1)=0.32 frac(len%4==0)=0.06  >20:1
+      1:363 2:136 3:72 4:34 5:20 6:19 7:14 8:7 9:5 10:5 12:2 13:1 14:2
+  A2 28:520    runs= 237 mean=2.05 P(1)=0.43 frac(len%4==0)=0.05  >20:0
+      1:123 2:57 3:29 4:8 5:7 6:5 7:2 8:4 9:1 11:1
+  B1 24:2064   runs= 833 mean=2.44 P(1)=0.43 frac(len%4==0)=0.10  >20:0
+      1:319 2:224 3:131 4:75 5:32 6:20 7:13 8:4 9:5 10:5 11:1 12:1 17:2 18:1
+  B2 24:2064   runs= 881 mean=2.31 P(1)=0.44 frac(len%4==0)=0.07  >20:0
+      1:394 2:215 3:114 4:60 5:39 6:30 7:13 8:4 9:4 10:4 11:1 12:2 17:1
+  C13 all      runs=1067 mean=1.91 P(1)=0.41 frac(len%4==0)=0.05  >20:0
+      1:591 2:244 3:114 4:51 5:34 6:14 7:6 8:6 9:4 10:2 11:1
+  C57 all      runs= 896 mean=2.27 P(1)=0.32 frac(len%4==0)=0.06  >20:0
+      1:470 2:189 3:101 4:42 5:21 6:24 7:14 8:7 9:9 10:9 11:3 13:1 14:1 15:2 16:1 17:1 18:1
+  geometric (random 1 Mbit bits): P(len=k)=2^-k, mean 2.0, frac(len%4==0)~0.07
+
+== ones per 32-bit window (idle noise on weak lines is balanced, P(1)~0.5;
+   after a strong packet the dongle output turns 0-biased, P(1)~0.3) ==
+  SP   16 12 18 12 15 15 13 12 17 12 18 12 15 15 13 12 17 12 15 14 13 12 15 14 13 12 18 12 15 15 13 12 17 16 12 14 14 15 14 11 15 14 14 14 14 12 13 14 14 14 15 14 14 14 15 14 14 14 15 14 15 14 12 14
+  A1   16 17 17 10 10  9 14 16 20 15 15  7 10  9 12  4  6 12 10  8  7  9 11 10 10 14  7  8  8 10 11 12 10 11  9 12 11 11 10  7 15 10 10 13 10  9 14 12 12 10 11 11 11  8 13  7  8 12 15  9 12  8  9 12
+  A2   16 18 17 13 13 16 16 16 19 16 10  9 11 13 13  6 13  9 14  3 11 11 10  8 10 13  7  3 11  8  8  8  6  5  8 13 15  7 10 11 11  9 10 14 12 10 12 10 10 11  9 12  8  8  8  9  6 11  6  5 10  7  7  6
+  B1   14 15 17 23 15 11 14 12 14 14 13  9 14 16 15 14 14 15 18  9 12 12 22 14 12 16 15 16 19 17 12 13 12 14  8 12 13 13 15 16  8 16 15 13 12 14 20 12 15 15 17  7 11 14 15 12 11 13 18 13 11 10 11 11
+  B2   14 15 17 14 20 13 11 16 11 13 17 20  9 12 11 14 13 15 10 14 17 16 20 17 15 11 18 11 18 13 12  6 14 14 19 16 20 20 12 15 12 11 14 16 13 12 16 10 17 11 14 18 16 12 10 17 15  9 13 13 14 14 13 14
+  C13  17 12  7 12 18 17 13 13 14 13 14 12 14 12 13 10 15 10 13 15 12 15 16 15 12 11 10 12 18 13 11 11 15  9 10  7 12 16 10 14 14 14 15 15 14 15 14 13 16 11 15 17 17 18 12 20 12 16 12 14 12  9 11 12
+  C57  16 15 16 13 12 12 19 14 10  6 14 12 11 11 11 10 11 12  8 11  9 14 13  9 10 12 12 14 17 13 11 12 13 10 10 11  8  9 11  6  4  8  9  6 11  9 10  7  6 11 12  6  9  5  4  6 11  6 10  6  6  6 11 10
+
+== maximum-likelihood change point in P(1) ==
+  A1   [24:240] change at bit  101  P(1) 0.55 -> 0.35
+  A1   [255:2064] change at bit  346  P(1) 0.54 -> 0.31
+  A2   [28:240] change at bit   78  P(1) 0.58 -> 0.46
+  A2   [258:2064] change at bit  335  P(1) 0.55 -> 0.29
+  B1   [24:2064] change at bit  135  P(1) 0.58 -> 0.42
+  B2   [24:2064] change at bit 1224  P(1) 0.46 -> 0.42
+  C13  [24:2064] change at bit 1938  P(1) 0.42 -> 0.32
+  C57  [24:2064] change at bit 1129  P(1) 0.38 -> 0.25
+
+== autocorrelation (fraction of equal bits at lag L); peaks > ~0.6 are structure ==
+  SP   [0:2064] lag16=0.53 lag32=0.53 lag64=0.55 top: 256:0.65 128:0.64 192:0.61 64:0.55 153:0.55 77:0.55 103:0.55 25:0.55
+  A1   [24:520] lag16=0.58 lag32=0.56 lag64=0.55 top: 231:0.64 13:0.60 214:0.59 183:0.59 16:0.58 2:0.58 256:0.57 73:0.57
+  A2   [28:520] lag16=0.52 lag32=0.51 lag64=0.51 top: 230:0.61 33:0.58 136:0.56 87:0.56 160:0.56 13:0.56 95:0.55 15:0.55
+  B1   [24:2064] lag16=0.51 lag32=0.51 lag64=0.51 top: 1:0.59 39:0.54 106:0.54 83:0.53 141:0.53 59:0.53 247:0.53 6:0.53
+  B2   [24:2064] lag16=0.50 lag32=0.49 lag64=0.52 top: 1:0.57 3:0.54 211:0.54 129:0.53 207:0.53 208:0.53 215:0.53 130:0.53
+  C13  [24:2064] lag16=0.52 lag32=0.50 lag64=0.51 top: 69:0.55 172:0.54 151:0.54 206:0.54 29:0.54 118:0.54 79:0.54 23:0.54
+  C57  [24:2064] lag16=0.58 lag32=0.57 lag64=0.59 top: 214:0.60 110:0.60 144:0.60 223:0.60 155:0.60 139:0.59 188:0.59 191:0.59
+
+== repeated 64-bit / 32-bit windows (<=3 / <=1 errors) at any phase within a frame ==
+  SP   64-bit repeats:  1984  e.g. [(13, 269), (13, 1873), (14, 270)]
+  SP   32-bit repeats:  3736  e.g. [(19, 2007), (20, 2008), (21, 277)]
+  A1   64-bit repeats:     0  e.g. []
+  A1   32-bit repeats:    12  e.g. [(24, 255), (25, 256), (26, 257)]
+  A2   64-bit repeats:     0  e.g. []
+  A2   32-bit repeats:    12  e.g. [(28, 258), (29, 259), (30, 260)]
+  B1   64-bit repeats:     0  e.g. []
+  B1   32-bit repeats:     0  e.g. []
+  B2   64-bit repeats:     0  e.g. []
+  B2   32-bit repeats:     0  e.g. []
+  C13  64-bit repeats:     0  e.g. []
+  C13  32-bit repeats:     0  e.g. []
+  C57  64-bit repeats:     0  e.g. []
+  C57  32-bit repeats:     0  e.g. []
+  (chance for 2000 bits: 64-bit ~0, 32-bit <=1 err ~0.03)
+
+== minimum linear complexity of any 48-bit window (LFSR-whitened constant data -> <=9) ==
+  SP   min LC 20 at bit   68; windows with LC<=12: 0
+  A1   min LC 21 at bit 1876; windows with LC<=12: 0
+  A2   min LC 20 at bit  492; windows with LC<=12: 0
+  B1   min LC 21 at bit  700; windows with LC<=12: 0
+  B2   min LC 20 at bit 1692; windows with LC<=12: 0
+  C13  min LC 19 at bit  860; windows with LC<=12: 0
+  C57  min LC 15 at bit 1448; windows with LC<=12: 0
+  (a window that is all-0/all-1 or 1010 also has LC <= 2; check the bits at the reported spot)
+
+== BLE data channel 23 (2450 MHz) dewhitening of the header after a 32-bit access address ==
+  A1 AA@24: header 0011010011111100  LLID=00 (reserved) len=63
+  A1 AA@255: header 0011010011100101  LLID=00 (reserved) len=167
+  A2 AA@28: header 0011010011111100  LLID=00 (reserved) len=63
+  A2 AA@258: header 0011010011100101  LLID=00 (reserved) len=167
+  B1 AA@24: header 0010111101100100  LLID=00 (reserved) len=38
+  B2 AA@24: header 0010111101100100  LLID=00 (reserved) len=38
+  Empty-PDU test (header 10xxx00000000000) for all 64 BLE channel seeds, both A packet 1s: 0 hits
+
+== Manchester: fraction of 01/10 pairs at phase 0/1 (Manchester -> ~1.0) ==
+  SP   1-bit chips: 0.48/0.51   2-bit chips (decimated): 0.51/0.51 0.48/0.54
+  A1   1-bit chips: 0.46/0.50   2-bit chips (decimated): 0.45/0.34 0.47/0.43
+  A2   1-bit chips: 0.48/0.49   2-bit chips (decimated): 0.44/0.43 0.52/0.48
+  B1   1-bit chips: 0.40/0.42   2-bit chips (decimated): 0.52/0.53 0.48/0.49
+  B2   1-bit chips: 0.42/0.45   2-bit chips (decimated): 0.47/0.48 0.48/0.49
+  C13  1-bit chips: 0.53/0.52   2-bit chips (decimated): 0.46/0.49 0.44/0.48
+  C57  1-bit chips: 0.43/0.45   2-bit chips (decimated): 0.42/0.39 0.42/0.45
+
+== differential decode (b[i] xor b[i-1]) then codebook / repeats ==
+  A1 diff ones fraction 0.45; head A571DCCF42C34FD7A7C8366185606F
+  B1 diff ones fraction 0.41; head 05D8ACF86E6B665F89248000240200
+
+== nearest known codeword at every phase (bits 1..63), all frames ==
+  A1   plain best codeword match 15/63 (81 at 840)
+  A1   inv   best codeword match 18/63 (CC at 209)
+  A1   rev   best codeword match 16/63 (93 at 1296)
+  A2   plain best codeword match 15/63 (A0 at 1493)
+  A2   inv   best codeword match 17/63 (A2 at 207)
+  A2   rev   best codeword match 16/63 (93 at 202)
+  B1   plain best codeword match 16/63 (A0 at 798)
+  B1   inv   best codeword match 16/63 (A2 at 833)
+  B1   rev   best codeword match 16/63 (81 at 373)
+  B2   plain best codeword match 14/63 (8A at 502)
+  B2   inv   best codeword match 15/63 (S at 622)
+  B2   rev   best codeword match 16/63 (F0 at 655)
+  C13  plain best codeword match 14/63 (F0 at 255)
+  C13  inv   best codeword match 17/63 (A2 at 1022)
+  C13  rev   best codeword match 12/63 (C4 at 961)
+  C57  plain best codeword match 16/63 (S at 26)
+  C57  inv   best codeword match 18/63 (C5 at 16)
+  C57  rev   best codeword match 14/63 (A0 at 543)
+  (chance minimum over ~2000 offsets x 16 words, from random bits: 12-17/63, median 16)
+
+== decimate by 2/3/4 (lower symbol rate oversampled) then codebook ==
+  A1 /2: best codeword match 15/63 (0, 598, 'C5')
+  A1 /3: best codeword match 15/63 (0, 584, '8C')
+  A1 /4: best codeword match 14/63 (2, 391, '8B')
+  B1 /2: best codeword match 15/63 (0, 552, '93')
+  B1 /3: best codeword match 15/63 (2, 269, '81')
+  B1 /4: best codeword match 14/63 (2, 247, 'C4')
+  B2 /2: best codeword match 15/63 (0, 791, '8A')
+  B2 /3: best codeword match 17/63 (2, 233, 'S')
+  B2 /4: best codeword match 15/63 (0, 14, 'B5')
+
+== one-sided (frequency-offset) codeword test: 64-bit-spaced blocks with <=1 violation,
+   >=2 margin to the next codeword, >=8 ones in the window ==
+  A1       0 of 31 blocks (bias to1, phase 63) 
+  A2       1 of 31 blocks (bias to0, phase 57) S
+  B1       0 of 31 blocks (bias to1, phase 63) 
+  B2       0 of 31 blocks (bias to1, phase 63) 
+  C13      0 of 31 blocks (bias to1, phase 63) 
+  C57      2 of 31 blocks (bias to0, phase 33) C5 C4
+  SP      16 of 31 blocks (bias to1, phase 24) S B5 A4 S S B5 A4 S
+  SPARSE   7 of 7 blocks (bias to0, phase 12) S B5 A4 S S B5 A4
+  SPARSE2  7 of 7 blocks (bias to0, phase 11) S B5 A4 S S B5 A4
+  X        6 of 7 blocks (bias to1, phase 37) S B5 A4 S S B5
+  SP loses half its blocks because the codeword grid moves by 4 bits after byte 128.
+
+== X burst (202434 t=21.05) words vs the true codewords rotated by 2 bits ==
+  S: 0->1 errors 11, 1->0 errors 0; 0->1 errors just before a 1: 10
+  B5: 0->1 errors 8, 1->0 errors 0; 0->1 errors just before a 1: 8
+  A4: 0->1 errors 10, 1->0 errors 0; 0->1 errors just before a 1: 10
+
+== CRC-16 at every packet end (bit-stream CRC from the sync start) ==
+  A1 p1  tests 208208  expected chance hits 3.18  distinct hits 3 ends [88, 106, 192]
+  A2 p1  tests 202384  expected chance hits 3.09  distinct hits 5 ends [92, 108, 178, 200, 218]
+  A1 p2  tests 279552  expected chance hits 4.27  distinct hits 0 ends []
+  A2 p2  tests 275184  expected chance hits 4.20  distinct hits 1 ends [431]
+  B1     tests 289152  expected chance hits 4.41  distinct hits 7 ends [398, 657, 725, 877, 960, 2021, 2030]
+  B2     tests 289152  expected chance hits 4.41  distinct hits 1 ends [535]
+  C13    tests 289152  expected chance hits 4.41  distinct hits 5 ends [106, 107, 108, 1645, 2021]
+  C57    tests 289152  expected chance hits 4.41  distinct hits 8 ends [522, 776, 1030, 1031, 1032, 1154, 1386, 1673]
+
+
