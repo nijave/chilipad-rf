@@ -122,6 +122,15 @@ static uint8_t  g_balen_written;
 static bool     g_capturing;             /* RX running, packets are pushed */
 static bool     g_hfxo_ok;
 
+/* On-air data rate ('m'), used for RX and TX.  Nrf_250Kbit is deprecated on
+ * the nRF52840; it is only offered when the MDK still defines it. */
+enum data_rate {
+	RATE_1M,
+	RATE_2M,
+	RATE_250K,
+};
+static uint8_t  g_rate      = RATE_1M;
+
 /* Double buffer bookkeeping.  g_cur is the buffer the *next* reception uses;
  * it is advanced in the ADDRESS interrupt, so the buffer that just finished is
  * always (g_cur ^ 1). */
@@ -212,6 +221,51 @@ static uint8_t bitrev8(uint8_t b)
 	b = (uint8_t)(((b & 0xCCu) >> 2) | ((b & 0x33u) << 2));
 	b = (uint8_t)(((b & 0xAAu) >> 1) | ((b & 0x55u) << 1));
 	return b;
+}
+
+#if defined(RADIO_MODE_MODE_Nrf_250Kbit)
+#define HAVE_RATE_250K 1
+#else
+#define HAVE_RATE_250K 0
+#endif
+
+static nrf_radio_mode_t rate_mode(void)
+{
+	switch (g_rate) {
+	case RATE_2M:
+		return NRF_RADIO_MODE_NRF_2MBIT;
+#if HAVE_RATE_250K
+	case RATE_250K:
+		return NRF_RADIO_MODE_NRF_250KBIT;
+#endif
+	default:
+		return NRF_RADIO_MODE_NRF_1MBIT;
+	}
+}
+
+/* Air time of one byte in microseconds at the current rate. */
+static uint32_t rate_us_per_byte(void)
+{
+	switch (g_rate) {
+	case RATE_2M:
+		return 4u;
+	case RATE_250K:
+		return 32u;
+	default:
+		return 8u;
+	}
+}
+
+static const char *rate_name(void)
+{
+	switch (g_rate) {
+	case RATE_2M:
+		return "Nrf_2Mbit";
+	case RATE_250K:
+		return "Nrf_250Kbit";
+	default:
+		return "Nrf_1Mbit";
+	}
 }
 
 static void radio_irq_mask(void)
@@ -539,7 +593,7 @@ static void radio_apply_frequency(void)
 static void radio_configure(void)
 {
 	radio_irq_mask();
-	nrf_radio_mode_set(NRF_RADIO, NRF_RADIO_MODE_NRF_1MBIT);
+	nrf_radio_mode_set(NRF_RADIO, rate_mode());
 	nrf_radio_txpower_set(NRF_RADIO, NRF_RADIO_TXPOWER_0DBM);
 	radio_apply_frequency();
 	radio_apply_packet_format(g_len);
@@ -822,6 +876,14 @@ static void print_config(void)
 	line_flush();
 
 	line_reset();
+	line_str("data rate     : ");
+	line_str(rate_name());
+	line_str(" (");
+	line_u32(rate_us_per_byte());
+	line_str(" us/byte, RX and TX)\r\n");
+	line_flush();
+
+	line_reset();
 	line_str("payload len   : ");
 	line_u32(g_len);
 	line_str("\r\n");
@@ -949,6 +1011,11 @@ static void print_help(void)
 	out_line("             't' alone clears both segments");
 	out_line("z<n>         send seg1 (+ seg2 back-to-back) n times, 1..1000");
 	out_line("             (default 1), each seg = preamble + 'w' addr + payload");
+	out_line("m<rate>      data rate for RX and TX: m1 = 1 Mbit (default), m2 = 2 Mbit");
+	out_line(HAVE_RATE_250K ? "             m250 = 250 kbit (deprecated on nRF52840)"
+				: "             (m250 = 250 kbit: not in this MDK, rejected)");
+	out_line("k<ms>        unmodulated carrier for 1..5000 ms on channel c;");
+	out_line("             k<ms>b0 / k<ms>b1 = constant '0' / '1' tone (DTX B0/B1)");
 	out_line("d            radio register dump + ISR and TX counters");
 	out_line("");
 	print_config();
@@ -1160,6 +1227,14 @@ static void replay_frame(uint32_t times)
 
 	uint32_t sent = 0;
 	uint32_t timeouts = 0;
+	/* START -> END is preamble + address + payload; 5 ms covers 1 and 2 Mbit,
+	 * 250 kbit needs up to ~8.3 ms. */
+	uint32_t end_us = (1u + g_addr_len + (uint32_t)g_last_len) *
+			  rate_us_per_byte() + 1000u;
+
+	if (end_us < 5000u) {
+		end_us = 5000u;
+	}
 
 	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_TXEN);
 	if (radio_wait_event(NRF_RADIO_EVENT_READY, 1000u)) {
@@ -1169,7 +1244,7 @@ static void replay_frame(uint32_t times)
 			if (i != 0u) {
 				nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_START);
 			}
-			if (!radio_wait_event(NRF_RADIO_EVENT_END, 5000u)) {
+			if (!radio_wait_event(NRF_RADIO_EVENT_END, end_us)) {
 				timeouts++;
 				break;
 			}
@@ -1230,6 +1305,7 @@ static uint8_t tx_one_burst(uint32_t pcnf1_1, uint32_t pcnf1_2, bool two,
 {
 	uint8_t len1 = g_tx_seg_len[0];
 	uint8_t segs = 0;
+	uint32_t us_per_byte = rate_us_per_byte();
 	uint32_t cap1;
 	unsigned int key = 0;
 	bool locked = false;
@@ -1253,8 +1329,9 @@ static uint8_t tx_one_burst(uint32_t pcnf1_1, uint32_t pcnf1_2, bool two,
 	if (two) {
 		/* From here to segment 1's END nothing may delay the CPU: the
 		 * PACKETPTR switch must land before END (a 1 byte segment 1 leaves
-		 * 8 us), and the CPU chain path starts segment 2 itself.  At most
-		 * preamble + address + 255 bytes, ~2.1 ms. */
+		 * one byte time: 8 us at 1 Mbit, 4 us at 2 Mbit), and the CPU chain
+		 * path starts segment 2 itself.  At most preamble + address + 255
+		 * bytes: ~2.1 ms at 1 Mbit, ~1.0 ms at 2 Mbit, ~8.3 ms at 250 kbit. */
 		key = irq_lock();
 		locked = true;
 	}
@@ -1270,7 +1347,8 @@ static uint8_t tx_one_burst(uint32_t pcnf1_1, uint32_t pcnf1_2, bool two,
 		nrf_radio_packetptr_set(NRF_RADIO, g_tx_seg[1]);
 	}
 
-	if (!radio_spin_event(NRF_RADIO_EVENT_END, (uint32_t)len1 * 8u + 1000u)) {
+	if (!radio_spin_event(NRF_RADIO_EVENT_END,
+			      (uint32_t)len1 * us_per_byte + 1000u)) {
 		goto timeout;
 	}
 	if (two && !hw_chain) {
@@ -1297,15 +1375,16 @@ static uint8_t tx_one_burst(uint32_t pcnf1_1, uint32_t pcnf1_2, bool two,
 
 		/* ADDRESS -> ADDRESS spacing minus the nominal air time of
 		 * segment 1's payload + segment 2's preamble and address
-		 * (8 us per byte at 1 Mbit) is the extra gap. */
-		uint32_t nominal = ((uint32_t)len1 + 1u + g_addr_len) * 8u;
+		 * (8 us per byte at 1 Mbit, 4 at 2 Mbit, 32 at 250 kbit) is
+		 * the extra gap. */
+		uint32_t nominal = ((uint32_t)len1 + 1u + g_addr_len) * us_per_byte;
 
 		g_tx_gap_us = (int32_t)(CAPTURE_TIMER->CC[0] - cap1) -
 			      (int32_t)nominal;
 		g_tx_gap_valid = true;
 
 		if (!radio_spin_event(NRF_RADIO_EVENT_END,
-				      (uint32_t)len2 * 8u + 1000u)) {
+				      (uint32_t)len2 * us_per_byte + 1000u)) {
 			goto timeout;
 		}
 		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
@@ -1414,6 +1493,78 @@ static void tx_segments(uint32_t times)
 		line_str(" us beyond preamble+address (TIMER1, +/-1 us)\r\n");
 		line_flush();
 	}
+}
+
+/* ------------------------------------------------------------------------- */
+/* Carrier ('k')                                                             */
+/* ------------------------------------------------------------------------- */
+
+/* Unmodulated carrier: with SHORTS = 0, TXEN ramps the radio up into TXIDLE
+ * and stays there; MODECNF0.DTX chooses what TXIDLE sends (Center = carrier at
+ * the channel frequency, B0 / B1 = the constant '0' / '1' FSK tone).  Capture
+ * is stopped first and restored afterwards, as in replay. */
+static void tx_carrier(uint32_t ms, uint8_t dtx)
+{
+	bool was_capturing = g_capturing;
+	uint32_t saved_modecnf0;
+	const char *name = (dtx == RADIO_MODECNF0_DTX_B0) ? "b0" :
+			   (dtx == RADIO_MODECNF0_DTX_B1) ? "b1" : "center";
+	bool ok;
+
+	if (was_capturing) {
+		radio_stop_rx();
+	}
+
+	radio_irq_mask();
+	nrf_radio_int_disable(NRF_RADIO, RADIO_INT_MASK);
+	nrf_radio_shorts_set(NRF_RADIO, 0);
+	radio_apply_frequency();
+
+	saved_modecnf0 = NRF_RADIO->MODECNF0;
+	nrf_radio_modecnf0_set(NRF_RADIO, nrf_radio_modecnf0_ru_get(NRF_RADIO), dtx);
+
+	line_reset();
+	line_str("[k] carrier ");
+	line_str(name);
+	line_str(" ch=");
+	line_u32(g_channel);
+	line_str(" (");
+	line_u32(2400u + g_channel);
+	line_str(" MHz) ");
+	line_u32(ms);
+	line_str(" ms ");
+	line_str(rate_name());
+	line_str("\r\n");
+	line_flush();
+	tx_pump();
+
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_READY);
+	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_TXEN);
+	ok = radio_wait_event(NRF_RADIO_EVENT_READY, 1000u);
+	if (ok) {
+		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_READY);
+		g_tx_ready_total++;
+		k_msleep((int32_t)ms); /* radio sits in TXIDLE */
+	} else {
+		g_tx_timeout_total++;
+	}
+
+	radio_tx_disable();
+	NRF_RADIO->MODECNF0 = saved_modecnf0;
+
+	radio_tx_restore_rx(was_capturing);
+
+	line_reset();
+	if (ok) {
+		line_str("[k] carrier ");
+		line_str(name);
+		line_ch(' ');
+		line_u32(ms);
+		line_str(" ms done\r\n");
+	} else {
+		line_str("[k] READY timeout, no carrier sent\r\n");
+	}
+	line_flush();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1699,6 +1850,85 @@ static void cmd_hop(const char *arg)
 	line_flush();
 }
 
+/* "m1" / "m2" / "m250": data rate for RX and TX.  Only MODE changes; address,
+ * PCNF0/1, CRC and bit reversal stay as they are.  A running capture is
+ * stopped and restarted so the receiver comes up in the new mode. */
+static void cmd_set_rate(const char *arg)
+{
+	uint8_t rate;
+	bool was_capturing = g_capturing;
+
+	if (strcmp(arg, "1") == 0) {
+		rate = RATE_1M;
+	} else if (strcmp(arg, "2") == 0) {
+		rate = RATE_2M;
+	} else if (strcmp(arg, "250") == 0) {
+		if (!HAVE_RATE_250K) {
+			out_line("[cfg] Nrf_250Kbit is not in this nRF52840 MDK "
+				 "(deprecated); use m1 or m2, unchanged");
+			return;
+		}
+		rate = RATE_250K;
+	} else {
+		out_line(HAVE_RATE_250K ? "[cfg] usage: m1 | m2 | m250"
+					: "[cfg] usage: m1 | m2");
+		return;
+	}
+
+	if (was_capturing) {
+		radio_stop_rx();
+	}
+	g_rate = rate;
+	radio_irq_mask();
+	nrf_radio_mode_set(NRF_RADIO, rate_mode());
+	radio_irq_unmask();
+	if (was_capturing) {
+		radio_start_rx();
+	}
+
+	line_reset();
+	line_str("[cfg] data rate -> ");
+	line_str(rate_name());
+	line_str(" (");
+	line_u32(rate_us_per_byte());
+	line_str(" us/byte)\r\n");
+	line_flush();
+}
+
+/* "k<ms>[b0|b1]": carrier for 1..5000 ms, DTX Center unless b0/b1 is given. */
+static void cmd_carrier(const char *arg)
+{
+	char digits[8];
+	size_t n = 0;
+	uint32_t ms;
+	uint8_t dtx = RADIO_MODECNF0_DTX_Center;
+
+	while (arg[n] >= '0' && arg[n] <= '9' && n < sizeof(digits) - 1u) {
+		digits[n] = arg[n];
+		n++;
+	}
+	digits[n] = '\0';
+
+	if (arg[n] == 'b' || arg[n] == 'B') {
+		if (arg[n + 1] == '0' && arg[n + 2] == '\0') {
+			dtx = RADIO_MODECNF0_DTX_B0;
+		} else if (arg[n + 1] == '1' && arg[n + 2] == '\0') {
+			dtx = RADIO_MODECNF0_DTX_B1;
+		} else {
+			n = 0; /* force the usage message */
+		}
+	} else if (arg[n] != '\0') {
+		n = 0;
+	}
+
+	if (n == 0u || !parse_u32(digits, &ms) || ms < 1u || ms > 5000u) {
+		out_line("[k] usage: k<ms>[b0|b1], ms = 1..5000, e.g. k500 or k500b1");
+		return;
+	}
+
+	tx_carrier(ms, dtx);
+}
+
 static void handle_command(const char *cmd)
 {
 	char letter = cmd[0];
@@ -1752,6 +1982,13 @@ static void handle_command(const char *cmd)
 		line_u32(g_isr_dis);
 		line_str(" irq_enabled=");
 		line_u32((uint32_t)irq_is_enabled(RADIO_IRQn));
+		line_str("\r\n");
+		line_flush();
+		line_reset();
+		line_str("[d] rate=");
+		line_str(rate_name());
+		line_str(" us_per_byte=");
+		line_u32(rate_us_per_byte());
 		line_str("\r\n");
 		line_flush();
 		line_reset();
@@ -1854,6 +2091,14 @@ static void handle_command(const char *cmd)
 			break;
 		}
 		tx_segments(has_num ? num : 0u);
+		break;
+
+	case 'm':
+		cmd_set_rate(arg);
+		break;
+
+	case 'k':
+		cmd_carrier(arg);
 		break;
 
 	case '\0':

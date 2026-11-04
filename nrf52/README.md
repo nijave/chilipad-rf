@@ -47,7 +47,7 @@ it with any serial terminal, 115200 baud (the CDC ACM baud rate is ignored).
 
 | Command | Action |
 |---------|--------|
-| `h` | help + current config (channel, length, address, byte order, bit reversal, BALEN, `BASE0`/`PREFIX0` as written, HFXO, capture state, packet/drop counts) |
+| `h` | help + current config (channel, data rate, length, address, byte order, bit reversal, BALEN, `BASE0`/`PREFIX0` as written, HFXO, capture state, packet/drop counts) |
 | `p` | start/stop capture. **Capture starts OFF at boot.** |
 | `c<n>` | channel 0..100 (default 50 = 2450 MHz) |
 | `l<n>` | packet length 1..255 (default 64) |
@@ -61,7 +61,10 @@ it with any serial terminal, 115200 baud (the CDC ACM baud rate is ignored).
 | `t2<hex>` | load TX segment 2 (same rules). `t2` alone clears segment 2 |
 | `t` | clear both TX segments |
 | `z<n>` | send the loaded segments `n` times (default 1, max 1000, 5 ms apart, radio disabled between bursts) on the current channel `c`; segment 2 follows segment 1 back to back (see below); then restore the previous state and print `[tx] sent=<n> segs=<m> timeouts=<k>` |
-| `d` | radio register dump, ISR counters, and TX totals `[d] tx ready=<n> end=<n> timeouts=<n> last_gap_us=<n>` |
+| `m<rate>` | data rate for RX and TX: `m1` = `Nrf_1Mbit` (default), `m2` = `Nrf_2Mbit`, `m250` = `Nrf_250Kbit` (see below). Only `MODE` changes; address, `PCNF0`/`PCNF1`, CRC off and bit reversal stay the same. If capture is on, the firmware stops it and starts it again in the new mode |
+| `k<ms>` | unmodulated carrier for `<ms>` ms (1..5000) on the current channel `c`: `MODECNF0.DTX = Center`, `TXEN`, wait for `READY`, stay in `TXIDLE`, then `DISABLE` and restore `MODECNF0`. Stops capture first and restores it after. Prints `[k] carrier <mode> <ms> ms done` |
+| `k<ms>b0` / `k<ms>b1` | same, but `DTX = B0` / `B1`: the constant '0' / '1' FSK tone instead of the center frequency (`<mode>` is `b0` / `b1`) |
+| `d` | radio register dump, ISR counters, `[d] rate=<mode> us_per_byte=<n>`, and TX totals `[d] tx ready=<n> end=<n> timeouts=<n> last_gap_us=<n>` |
 
 Output is one line per packet:
 
@@ -79,6 +82,19 @@ If the packet ring in the firmware fills up faster than the USB link drains it,
 `[drop n]` lines are printed (rate limited) and the totals appear in `h`.
 Output never blocks: when no host is reading, lines are dropped and counted in
 `output drops`.
+
+## Data rate (`m`)
+
+`m` sets `MODE` for receive, `x`, `z` and `k`. The firmware scales the
+TX event timeouts and the `[z] seg gap` nominal air time by the byte time
+of the mode: 8 µs per byte at 1 Mbit, 4 µs at 2 Mbit, 32 µs at 250 kbit.
+`PCNF0` keeps the 8-bit preamble in every mode. Nordic's ESB driver uses a
+16-bit preamble at 2 Mbit, so the 2 Mbit receive sensitivity can be lower.
+
+Nordic marks `Nrf_250Kbit` as deprecated on the nRF52840. The firmware offers `m250` only
+when the MDK still defines `RADIO_MODE_MODE_Nrf_250Kbit`. The nRF52840 MDK
+in Zephyr 4.4.2 (`hal_nordic`) does not define it, so this build rejects
+`m250` with a message and supports `m1` and `m2` only.
 
 ## Transmitting a long burst (`t` / `z`)
 
@@ -105,7 +121,7 @@ segments from a captured burst:
    bytes**: the radio sends them itself. Load it with `t2<hex>`.
 
 The only difference on air from the original burst is one extra preamble byte
-(8 µs) in front of the second address, plus the gap below.
+(8 µs at 1 Mbit) in front of the second address, plus the gap below.
 
 Selector rule for `t`: the payload always has an even number of hex digits,
 so the firmware reads a leading `1` or `2` as a selector only when the
@@ -185,8 +201,8 @@ receivers.
 
 * `PCNF0`: `LFLEN=0`, `S0LEN=0`, `S1LEN=0`, 8-bit preamble; `PCNF1`:
   `STATLEN=MAXLEN=len`, `BALEN=alent-1`, `ENDIAN=Big`, whitening off; CRC off
-  (`CRCCNF.LEN=0`); `TXPOWER=0 dBm`; `MODE=Nrf_1Mbit`; HFXO started before the
-  radio is used.
+  (`CRCCNF.LEN=0`); `TXPOWER=0 dBm`; `MODE=Nrf_1Mbit` by default (`m`
+  changes it); HFXO started before the radio is used.
 * Two payload buffers are alternated: the `ADDRESS` interrupt retargets
   `PACKETPTR` (latched by `START`) at the other buffer, the `END` interrupt
   pushes the finished one into the ring. `SHORTS = READY_START |
