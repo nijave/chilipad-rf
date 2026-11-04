@@ -983,46 +983,26 @@ static void energy_scan(uint32_t seconds)
 
 	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
 
-	/* Highest sample count first, at most ten lines.  Printed channels are
-	 * marked with 0xFFFF in the count array instead of being moved. */
+	/* Every channel, in channel order, so two scans (idle vs. button presses)
+	 * can be diffed on the host: "S <ch> <count above -75 dBm> <max dBm>". */
 	line_reset();
 	line_str("[scan] ");
 	line_u32(sweeps);
-	line_str(" sweeps; channels with samples above -75 dBm:\r\n");
+	line_str(" sweeps; S <ch> <samples above -75 dBm> <max dBm>\r\n");
 	line_flush();
-
-	uint8_t shown = 0;
-
-	for (; shown < 10; shown++) {
-		int best = -1;
-
-		for (uint16_t ch = 0; ch <= CHANNEL_MAX; ch++) {
-			if (g_scan_count[ch] == 0u || g_scan_count[ch] == 0xFFFFu) {
-				continue;
-			}
-			if (best < 0 || g_scan_count[ch] > g_scan_count[best]) {
-				best = (int)ch;
-			}
-		}
-		if (best < 0) {
-			break;
-		}
-
+	for (uint16_t ch = 0; ch <= CHANNEL_MAX; ch++) {
 		line_reset();
-		line_str("  ch ");
-		line_u32((uint32_t)best);
-		line_str(": ");
-		line_u32(g_scan_count[best]);
-		line_str(" samples, max ");
-		line_i32((int32_t)g_scan_max[best]);
-		line_str(" dBm\r\n");
+		line_str("S ");
+		line_u32(ch);
+		line_ch(' ');
+		line_u32(g_scan_count[ch]);
+		line_ch(' ');
+		line_i32((int32_t)g_scan_max[ch]);
+		line_str("\r\n");
 		line_flush();
-
-		g_scan_count[best] = 0xFFFFu; /* mark as printed */
+		tx_pump();
 	}
-	if (shown == 0u) {
-		out_line("  (nothing above -75 dBm; try longer or a nearer remote)");
-	}
+	out_line("[scan] done");
 
 	/* Back to the configured channel and capture state. */
 	radio_apply_frequency();
