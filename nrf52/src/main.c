@@ -561,9 +561,21 @@ static void push_packet(uint8_t idx, uint64_t ts, int8_t rssi)
 	g_isr_prev_ts = ts;
 }
 
+static volatile uint32_t g_isr_calls, g_isr_addr, g_isr_end, g_isr_dis;
+
 static void radio_isr(const void *arg)
 {
 	ARG_UNUSED(arg);
+	g_isr_calls++;
+	if (nrf_radio_event_check(NRF_RADIO, NRF_RADIO_EVENT_ADDRESS)) {
+		g_isr_addr++;
+	}
+	if (nrf_radio_event_check(NRF_RADIO, NRF_RADIO_EVENT_END)) {
+		g_isr_end++;
+	}
+	if (nrf_radio_event_check(NRF_RADIO, NRF_RADIO_EVENT_DISABLED)) {
+		g_isr_dis++;
+	}
 
 	/* END first: if a new ADDRESS is already pending, g_cur has not been
 	 * flipped for it yet, so (g_cur ^ 1) is still the buffer that ended. */
@@ -1345,6 +1357,46 @@ static void handle_command(const char *cmd)
 	}
 
 	switch (letter) {
+	case 'd': {
+		static const char *const names[] = {
+			"STATE", "SHORTS", "INTEN", "RXADDR", "PCNF0", "PCNF1",
+			"BASE0", "PREFIX0", "MODE", "FREQ", "PKTPTR", "CRCCNF",
+			"HFCLKSTAT", "MODECNF0",
+		};
+		uint32_t vals[] = {
+			NRF_RADIO->STATE, NRF_RADIO->SHORTS, NRF_RADIO->INTENSET,
+			NRF_RADIO->RXADDRESSES, NRF_RADIO->PCNF0, NRF_RADIO->PCNF1,
+			NRF_RADIO->BASE0, NRF_RADIO->PREFIX0, NRF_RADIO->MODE,
+			NRF_RADIO->FREQUENCY, NRF_RADIO->PACKETPTR, NRF_RADIO->CRCCNF,
+			NRF_CLOCK->HFCLKSTAT, NRF_RADIO->MODECNF0,
+		};
+		for (size_t i = 0; i < ARRAY_SIZE(vals); i++) {
+			line_reset();
+			line_str("[d] ");
+			line_str(names[i]);
+			line_str("=0x");
+			for (int sh = 24; sh >= 0; sh -= 8) {
+				line_hex_byte((uint8_t)(vals[i] >> sh));
+			}
+			line_str("\r\n");
+			line_flush();
+		}
+		line_reset();
+		line_str("[d] isr calls=");
+		line_u32(g_isr_calls);
+		line_str(" addr=");
+		line_u32(g_isr_addr);
+		line_str(" end=");
+		line_u32(g_isr_end);
+		line_str(" disabled=");
+		line_u32(g_isr_dis);
+		line_str(" irq_enabled=");
+		line_u32((uint32_t)irq_is_enabled(RADIO_IRQn));
+		line_str("\r\n");
+		line_flush();
+		break;
+	}
+
 	case 'h':
 		print_help();
 		break;
