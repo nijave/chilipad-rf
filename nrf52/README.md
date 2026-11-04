@@ -219,3 +219,11 @@ receivers.
 
 Own hardware, own signal. Obey local RF law; use `x` and `z` only to
 replay frames you captured from your own device.
+
+## Deviation and lead-in (`mb1`, `mb2`, `j`)
+
+`mb1` selects `Ble_1Mbit` (1 Mbit/s, ±250 kHz deviation) and `mb2`
+`Ble_2Mbit` (±500 kHz); `m1`/`m2` keep the Nordic modes (±170/±500 kHz).
+Only MODE changes. `j<ms>[b0|b1|c]` makes every `z` burst start with a
+carrier of that length (constant 1 by default, `b0` constant 0, `c`
+centre) that runs straight into the preamble with no gap; `j0` turns it off.

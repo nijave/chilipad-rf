@@ -128,8 +128,15 @@ enum data_rate {
 	RATE_1M,
 	RATE_2M,
 	RATE_250K,
+	RATE_BLE1M,   /* 1 Mbit, +/-250 kHz deviation (vs +/-170 kHz for Nrf_1Mbit) */
+	RATE_BLE2M,   /* 2 Mbit, +/-500 kHz deviation */
 };
 static uint8_t  g_rate      = RATE_1M;
+
+/* Carrier lead-in before a 'z' burst ('j'): the radio sits in TXIDLE for
+ * this long, emitting DTX (B1 by default), then START follows with no gap. */
+static uint32_t g_tx_lead_us;
+static uint8_t  g_tx_lead_dtx = RADIO_MODECNF0_DTX_B1;
 
 /* Double buffer bookkeeping.  g_cur is the buffer the *next* reception uses;
  * it is advanced in the ADDRESS interrupt, so the buffer that just finished is
@@ -234,6 +241,10 @@ static nrf_radio_mode_t rate_mode(void)
 	switch (g_rate) {
 	case RATE_2M:
 		return NRF_RADIO_MODE_NRF_2MBIT;
+	case RATE_BLE1M:
+		return NRF_RADIO_MODE_BLE_1MBIT;
+	case RATE_BLE2M:
+		return NRF_RADIO_MODE_BLE_2MBIT;
 #if HAVE_RATE_250K
 	case RATE_250K:
 		return NRF_RADIO_MODE_NRF_250KBIT;
@@ -248,6 +259,7 @@ static uint32_t rate_us_per_byte(void)
 {
 	switch (g_rate) {
 	case RATE_2M:
+	case RATE_BLE2M:
 		return 4u;
 	case RATE_250K:
 		return 32u;
@@ -261,6 +273,10 @@ static const char *rate_name(void)
 	switch (g_rate) {
 	case RATE_2M:
 		return "Nrf_2Mbit";
+	case RATE_BLE1M:
+		return "Ble_1Mbit";
+	case RATE_BLE2M:
+		return "Ble_2Mbit";
 	case RATE_250K:
 		return "Nrf_250Kbit";
 	default:
@@ -1014,6 +1030,7 @@ static void print_help(void)
 	out_line("m<rate>      data rate for RX and TX: m1 = 1 Mbit (default), m2 = 2 Mbit");
 	out_line(HAVE_RATE_250K ? "             m250 = 250 kbit (deprecated on nRF52840)"
 				: "             (m250 = 250 kbit: not in this MDK, rejected)");
+	out_line("j<ms>[b0|b1|c] carrier lead-in before each z burst, 0 = off (b1 default)");
 	out_line("k<ms>        unmodulated carrier for 1..5000 ms on channel c;");
 	out_line("             k<ms>b0 / k<ms>b1 = constant '0' / '1' tone (DTX B0/B1)");
 	out_line("d            radio register dump + ISR and TX counters");
@@ -1312,12 +1329,20 @@ static uint8_t tx_one_burst(uint32_t pcnf1_1, uint32_t pcnf1_2, bool two,
 
 	NRF_RADIO->PCNF1 = pcnf1_1;
 	nrf_radio_packetptr_set(NRF_RADIO, g_tx_seg[0]);
-	nrf_radio_shorts_set(NRF_RADIO, NRF_RADIO_SHORT_READY_START_MASK |
+	/* With a lead-in ('j'), READY does not start the packet: the radio sits
+	 * in TXIDLE emitting the DTX carrier, then START is triggered by the CPU
+	 * so the carrier flows straight into the preamble. */
+	nrf_radio_shorts_set(NRF_RADIO,
+			     (g_tx_lead_us ? 0u : NRF_RADIO_SHORT_READY_START_MASK) |
 			     (hw_chain ? NRF_RADIO_SHORT_END_START_MASK : 0u));
 	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_READY);
 	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_ADDRESS);
 	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
 	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+	if (g_tx_lead_us) {
+		nrf_radio_modecnf0_set(NRF_RADIO, nrf_radio_modecnf0_ru_get(NRF_RADIO),
+				       g_tx_lead_dtx);
+	}
 
 	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_TXEN);
 	if (!radio_spin_event(NRF_RADIO_EVENT_READY, 1000u)) {
@@ -1325,6 +1350,10 @@ static uint8_t tx_one_burst(uint32_t pcnf1_1, uint32_t pcnf1_2, bool two,
 	}
 	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_READY);
 	g_tx_ready_total++;
+	if (g_tx_lead_us) {
+		k_busy_wait(g_tx_lead_us);
+		nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_START);
+	}
 
 	if (two) {
 		/* From here to segment 1's END nothing may delay the CPU: the
@@ -1862,6 +1891,10 @@ static void cmd_set_rate(const char *arg)
 		rate = RATE_1M;
 	} else if (strcmp(arg, "2") == 0) {
 		rate = RATE_2M;
+	} else if (strcmp(arg, "b1") == 0) {
+		rate = RATE_BLE1M;
+	} else if (strcmp(arg, "b2") == 0) {
+		rate = RATE_BLE2M;
 	} else if (strcmp(arg, "250") == 0) {
 		if (!HAVE_RATE_250K) {
 			out_line("[cfg] Nrf_250Kbit is not in this nRF52840 MDK "
@@ -1870,8 +1903,8 @@ static void cmd_set_rate(const char *arg)
 		}
 		rate = RATE_250K;
 	} else {
-		out_line(HAVE_RATE_250K ? "[cfg] usage: m1 | m2 | m250"
-					: "[cfg] usage: m1 | m2");
+		out_line(HAVE_RATE_250K ? "[cfg] usage: m1 | m2 | mb1 | mb2 | m250"
+					: "[cfg] usage: m1 | m2 | mb1 | mb2");
 		return;
 	}
 
@@ -2100,6 +2133,36 @@ static void handle_command(const char *cmd)
 	case 'k':
 		cmd_carrier(arg);
 		break;
+
+	case 'j': {
+		/* "j<ms>[b0|b1|c]": carrier lead-in for 'z' (0 = off). */
+		uint32_t ms = has_num ? num : 0u;
+		const char *p = arg;
+
+		while (*p >= '0' && *p <= '9') {
+			p++;
+		}
+		if (ms > 5000u) {
+			ms = 5000u;
+		}
+		g_tx_lead_us = ms * 1000u;
+		if (strcmp(p, "b0") == 0) {
+			g_tx_lead_dtx = RADIO_MODECNF0_DTX_B0;
+		} else if (strcmp(p, "c") == 0) {
+			g_tx_lead_dtx = RADIO_MODECNF0_DTX_Center;
+		} else {
+			g_tx_lead_dtx = RADIO_MODECNF0_DTX_B1;
+		}
+		line_reset();
+		line_str("[cfg] z lead-in carrier ");
+		line_u32(ms);
+		line_str(" ms dtx=");
+		line_str(g_tx_lead_dtx == RADIO_MODECNF0_DTX_B0 ? "b0" :
+			 g_tx_lead_dtx == RADIO_MODECNF0_DTX_Center ? "center" : "b1");
+		line_str("\r\n");
+		line_flush();
+		break;
+	}
 
 	case '\0':
 		break;
