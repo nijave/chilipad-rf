@@ -1019,6 +1019,7 @@ static void print_help(void)
 	out_line("o            toggle byte order (as given <-> reversed)");
 	out_line("r            toggle per-byte bit reversal (on by default)");
 	out_line("s<sec>       energy scan ch 0..100 for <sec> s (default 2, max 60)");
+	out_line("e<ms>        energy vs time on channel c for <ms> (default 2000, max 30000)");
 	out_line("y<list>@<ms> hop channels, e.g. y10,30,50,70@200; 'y' stops");
 	out_line("x<n>         replay the last captured frame n times (default 10)");
 	out_line("t<hex>       load TX segment 1 (up to 255 bytes); same as t1<hex>");
@@ -1155,6 +1156,148 @@ static void energy_scan(uint32_t seconds)
 	nrf_radio_int_enable(NRF_RADIO, RADIO_INT_MASK);
 	radio_irq_unmask();
 
+	if (was_capturing) {
+		radio_start_rx();
+	}
+}
+
+/* ------------------------------------------------------------------------- */
+/* Energy vs. time on the current channel ('e')                              */
+/* ------------------------------------------------------------------------- */
+
+#define ENERGY_SEGS   128
+#define ENERGY_THRESH (-62)   /* dBm; WiFi here stays below -60 */
+
+/* Samples RSSI back-to-back (about 10 us per sample) for <ms> and prints
+ * every stretch above ENERGY_THRESH as "E <start_us> <dur_us> <max_dBm>".
+ * Unmodulated carrier counts as energy, so this shows the lead-in before a
+ * burst and any repeats, which an address trigger cannot. */
+static void energy_time(uint32_t ms)
+{
+	bool was_capturing = g_capturing;
+	static uint32_t seg_start[ENERGY_SEGS], seg_end[ENERGY_SEGS];
+	static int8_t   seg_max[ENERGY_SEGS];
+	uint32_t nseg = 0;
+	bool in_seg = false;
+	uint32_t below = 0;
+	uint32_t samples = 0;
+	int8_t cur_max = -128;
+	uint32_t t_last_above = 0;
+
+	if (ms == 0u) {
+		ms = 2000;
+	}
+	if (ms > 30000u) {
+		ms = 30000;
+	}
+	if (was_capturing) {
+		radio_stop_rx();
+	}
+	radio_irq_mask();
+	nrf_radio_int_disable(NRF_RADIO, RADIO_INT_MASK);
+	nrf_radio_shorts_set(NRF_RADIO, 0);
+	radio_apply_frequency();
+
+	line_reset();
+	line_str("[e] energy vs time on ch ");
+	line_u32(g_channel);
+	line_str(" for ");
+	line_u32(ms);
+	line_str(" ms, threshold ");
+	line_i32(ENERGY_THRESH);
+	line_str(" dBm; press the remote...\r\n");
+	line_flush();
+	tx_pump();
+
+	nrf_timer_task_trigger(CAPTURE_TIMER, NRF_TIMER_TASK_STOP);
+	nrf_timer_task_trigger(CAPTURE_TIMER, NRF_TIMER_TASK_CLEAR);
+	nrf_timer_task_trigger(CAPTURE_TIMER, NRF_TIMER_TASK_START);
+
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_READY);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_RXEN);
+	if (!radio_wait_event(NRF_RADIO_EVENT_READY, 1000u)) {
+		out_line("[e] READY timeout");
+		goto done;
+	}
+
+	for (;;) {
+		nrf_timer_task_trigger(CAPTURE_TIMER, NRF_TIMER_TASK_CAPTURE1);
+		uint32_t now = CAPTURE_TIMER->CC[1];
+
+		if (now >= ms * 1000u) {
+			break;
+		}
+		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_RSSIEND);
+		nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_RSSISTART);
+		if (!radio_wait_event(NRF_RADIO_EVENT_RSSIEND, 200u)) {
+			continue;
+		}
+		int8_t rssi = (int8_t)-(int)nrf_radio_rssi_sample_get(NRF_RADIO);
+		samples++;
+
+		if (rssi >= ENERGY_THRESH) {
+			if (!in_seg) {
+				if (nseg >= ENERGY_SEGS) {
+					break;
+				}
+				in_seg = true;
+				seg_start[nseg] = now;
+				cur_max = rssi;
+			} else if (rssi > cur_max) {
+				cur_max = rssi;
+			}
+			t_last_above = now;
+			below = 0;
+		} else if (in_seg) {
+			/* End a segment after ~30 us (3 samples) of silence so the short
+			 * dips inside a burst do not split it. */
+			if (++below >= 3u) {
+				seg_end[nseg] = t_last_above;
+				seg_max[nseg] = cur_max;
+				nseg++;
+				in_seg = false;
+			}
+		}
+	}
+	if (in_seg && nseg < ENERGY_SEGS) {
+		seg_end[nseg] = t_last_above;
+		seg_max[nseg] = cur_max;
+		nseg++;
+	}
+
+done:
+	nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_DISABLE);
+	(void)radio_wait_disabled(1000);
+
+	line_reset();
+	line_str("[e] ");
+	line_u32(samples);
+	line_str(" samples, ");
+	line_u32(nseg);
+	line_str(" stretches above threshold; E <start_us> <dur_us> <max_dBm>\r\n");
+	line_flush();
+	for (uint32_t i = 0; i < nseg; i++) {
+		line_reset();
+		line_str("E ");
+		line_u32(seg_start[i]);
+		line_ch(' ');
+		line_u32(seg_end[i] - seg_start[i]);
+		line_ch(' ');
+		line_i32((int32_t)seg_max[i]);
+		line_str("\r\n");
+		line_flush();
+		tx_pump();
+	}
+	out_line("[e] done");
+
+	radio_apply_packet_format(g_len);
+	radio_apply_address();
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_ADDRESS);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+	nrf_radio_int_enable(NRF_RADIO, RADIO_INT_MASK);
+	radio_irq_unmask();
 	if (was_capturing) {
 		radio_start_rx();
 	}
@@ -2104,6 +2247,10 @@ static void handle_command(const char *cmd)
 
 	case 's':
 		energy_scan(has_num ? num : 0u);
+		break;
+
+	case 'e':
+		energy_time(has_num ? num : 0u);
 		break;
 
 	case 'y':
