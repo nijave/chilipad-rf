@@ -1,0 +1,39 @@
++0.005281 [cap] capture ON
++15.004983 [cap] capture OFF
++40.313492 [scan] 25 s RSSI sweep over ch 0..100, press remote buttons...
++40.314464 [scan] 1787 sweeps; channels with samples above -75 dBm:
++40.315010 ch 63: 1087 samples, max -59 dBm
++40.315727 ch 64: 1085 samples, max -43 dBm
++40.316281 ch 61: 1072 samples, max -59 dBm
++40.316857 ch 60: 978 samples, max -59 dBm
++40.317589 ch 65: 926 samples, max -59 dBm
++40.318134 ch 59: 772 samples, max -61 dBm
++40.319127 ch 62: 738 samples, max -62 dBm
++40.319948 ch 66: 631 samples, max -62 dBm
++40.320574 ch 58: 366 samples, max -65 dBm
++40.321343 ch 2: 282 samples, max -50 dBm
++42.054031 === chilipad-sniffer (nRF52840 dongle, LT8920 2.4 GHz) ===
++42.054745 h            help + current config
++42.055787 p            start/stop capture (starts OFF at boot)
++42.056677 c<n>         channel 0..100 (default 50 = 2450 MHz)
++42.057476 l<n>         payload length 1..255 (default 64)
++42.058568 w<hex>       trigger address, 3..5 bytes on-air order (0B5C8E03)
++42.059482 'w' alone resets the address to the default
++42.060297 o            toggle byte order (as given <-> reversed)
++42.061224 r            toggle per-byte bit reversal (on by default)
++42.062299 s<sec>       energy scan ch 0..100 for <sec> s (default 2, max 60)
++42.063216 y<list>@<ms> hop channels, e.g. y10,30,50,70@200; 'y' stops
++42.064300 x<n>         replay the last captured frame n times (default 10)
++42.064818 channel       : 50 (2450 MHz)
++42.065119 payload len   : 64
++42.065932 trigger addr  : 0B5C8E03 (4 bytes, on-air order)
++42.066381 byte order    : as given
++42.066691 bit reversal  : on
++42.067510 BALEN         : 3 (address = BALEN + 1 prefix byte)
++42.068095 BASE0         : 0x713AD000
++42.069611 PREFIX0       : 0xC0 (AP0, most significant address byte)
++42.070110 HFXO          : running
++42.070578 capture       : off
++42.070972 packets       : 0
++42.071301 ring drops    : 0
++42.071739 output drops  : 0 bytes

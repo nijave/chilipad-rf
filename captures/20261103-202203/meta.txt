@@ -1,0 +1,11 @@
+start: 2026-11-03T20:22:03.353
+note: scan diff: idle 0-20s, presses with remote close 22-42s
+duration: 44.0
+pre_roll: 3.0
+esp_port: /dev/ttyUSB0
+esp_start: s20 s20@22
+esp_stop: 
+nrf_port: /dev/ttyACM1
+nrf_start: s20 s20@22
+nrf_stop: 
+t0: 2026-11-03T20:22:06.380

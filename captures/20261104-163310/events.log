@@ -1,0 +1,10 @@
++0.000000 start
++0.003193 esp cmd c50
++0.003693 nrf cmd c50
++0.102263 esp cmd w9388B0CA
++0.102584 nrf cmd l255
++0.202339 esp cmd o
++0.202695 nrf cmd w9388B0CA
++0.402396 esp cmd p
++0.402753 nrf cmd p
++45.014197 stop

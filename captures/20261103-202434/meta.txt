@@ -1,0 +1,11 @@
+start: 2026-11-03T20:24:34.488
+note: remote close, presses throughout. nrf ch50 trigger AAAAAA 0-20s, 555555 20-40s len64; esp ch80 AAAA 0-20, 5555 20-40
+duration: 42.0
+pre_roll: 3.0
+esp_port: /dev/ttyUSB0
+esp_start: c80 p@0.3 p@20 a@20.2 p@20.4
+esp_stop: p
+nrf_port: /dev/ttyACM1
+nrf_start: c50 l64 wAAAAAA p@0.5 p@20 w555555@20.2 p@20.4
+nrf_stop: p
+t0: 2026-11-03T20:24:37.537

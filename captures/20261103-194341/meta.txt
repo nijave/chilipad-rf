@@ -1,0 +1,11 @@
+start: 2026-11-03T19:43:41.002
+note: test1 trigger order: esp order A 0-22s, B 22-44s; nrf default/r/o/r every 11s
+duration: 44.0
+pre_roll: 3.0
+esp_port: /dev/ttyUSB0
+esp_start: w0B5C8E03 p@0.3 p@22 o@22.2 p@22.4
+esp_stop: p
+nrf_port: /dev/ttyACM1
+nrf_start: p r@11 o@22 r@33
+nrf_stop: p
+t0: 2026-11-03T19:43:44.044

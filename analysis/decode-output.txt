@@ -1,0 +1,40 @@
+== stitched bursts ==
+74F: bits identical across captures = 2323 (290.375 bytes); noise after: ['9E2E2125', '58034440', '868408A2']
+   tokens: 0:S 8:B5 16:A4 24:s' 32:S 40:B5 48:A4 56:s' 64:F0 72:8A 80:F0 88:8A 96:S 104:B5 112:A4 120:s' 128:<1101> 128.5:cc' 136.5:s' 144.5:8A 152.5:F0 160.5:A7 168.5:A7 176.5:F0 184.5:A7 192.5:S 200.5:A7 208.5:S 216.5:A7 224.5:S 232.5:S 240.5:8B 248.5:S 256.5:C5 264.5:cc' 272.5:8c' 280.5:8B 288.5:<100100110000000>
+75F: bits identical across captures = 2323 (290.375 bytes); noise after: ['2778534F', '282A74B8', '84ABB2C0']
+   tokens: 0:S 8:B5 16:A4 24:s' 32:S 40:B5 48:A4 56:s' 64:F0 72:8A 80:F0 88:8A 96:S 104:B5 112:A4 120:s' 128:<1101> 128.5:cc' 136.5:s' 144.5:8A 152.5:F0 160.5:A7 168.5:A7 176.5:C5 184.5:a7' 192.5:S 200.5:A7 208.5:S 216.5:A7 224.5:S 232.5:S 240.5:8C 248.5:S 256.5:81 264.5:C5 272.5:8a' 280.5:8C 288.5:<100100110000000>
+== first bit of the following block, per block (=> true last bit) ==
+   S 9388B0CAD019F2E6  next-first-bit {'1': 69}
+  B5 B52BE101838EE2C9  next-first-bit {'1': 18}
+  A4 A4717A73025C4516  next-first-bit {'0': 18}
+  F0 F020764CA1565672  next-first-bit {'1': 20}
+  8A 8A27C039D2C6C844  next-first-bit {'1': 19}
+  CC CC18FE2A95645252  next-first-bit {'0': 7}
+  A7 A7E03171410A772C  next-first-bit {'1': 30}
+  C5 C53AD4112D89E197  next-first-bit {'0': 4}
+  8C 8CB0A48A7E244638  next-first-bit {'1': 3}
+  81 81C0514D66CA15F8  next-first-bit {'1': 1}
+  8B 8B18AA986C3302DE  next-first-bit {'1': 2}
+  E3 E33124028D105F97  next-first-bit {'1': 1}
+  93 93035E1B4395C402  next-first-bit {'1': 1}
+  C4 C4F30304A5ECD55C  next-first-bit {'1': 1}
+  A2 A2E1F402A42EF39A  next-first-bit {}
+  A0 A00C1ED3888E902E  next-first-bit {}
+  true last bits: S=1 B5=1 A4=0 F0=1 8A=1 CC=0 A7=1 C5=0 8C=1 81=1 8B=1 E3=1 93=1 C4=1 A2=0 A0=1
+  blocks whose last bit is 0 (follower shows 1388/27E0/0A27/.. form): A4, CC, C5, A2
+== block occurrences in the 74F/75F bursts ==
+  74F: Sx12, A7x5, F0x4, B5x3, A4x3, 8Ax3, CCx2, 8Bx2, C5x1, 8Cx1
+  75F: Sx12, A7x5, 8Ax4, B5x3, A4x3, F0x3, C5x2, 8Cx2, CCx1, 81x1
+== encoder check ==
+  74F: encoder == capture over 2323 bits: True
+  75F: encoder == capture over 2323 bits: True
+  75F head window (2072 bits): match True
+  76F head window (2072 bits): match True
+  77F head window (2072 bits): match True
+  74F head window (2072 bits): match True
+  sweep/dongle/ESP blocks checked against encoder: 1748, mismatches 0
+== written ==
+  74F.hex  290 bytes  packet 07 A5 44 4A 40 40 00 0E 7B EF  [captured (head+tail), equals encoder]
+  75F.hex  290 bytes  packet 07 A5 44 4B 40 40 00 0F B6 F5  [captured (head+tail), equals encoder]
+  76F.hex  290 bytes  packet 07 A5 44 4C 40 40 00 10 1C 2D  [captured bytes 0..259 + predicted tail (CRC-16/KERMIT)]
+  77F.hex  290 bytes  packet 07 A5 44 4D 40 40 00 11 D1 37  [captured bytes 0..259 + predicted tail (CRC-16/KERMIT)]

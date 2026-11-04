@@ -1,0 +1,5 @@
++0.006887 [cap] capture ON
++11.006557 [addr] bit reversal -> off
++22.006019 [addr] byte order -> reversed
++33.006615 [addr] bit reversal -> on
++44.052005 [cap] capture OFF

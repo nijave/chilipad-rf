@@ -1,0 +1,11 @@
+start: 2026-11-03T20:51:57.963
+note: who-sends-what: remote FAR (6+ ft), radios near Cube; single presses ~every 10 s incl. wake from idle; per-frame RSSI on dongle
+duration: 75.0
+pre_roll: 3.0
+esp_port: /dev/ttyUSB0
+esp_start: c50 w9388B0CA o p@0.4
+esp_stop: p
+nrf_port: /dev/ttyACM1
+nrf_start: c50 l64 w9388B0CA p@0.4
+nrf_stop: p
+t0: 2026-11-03T20:52:00.985
