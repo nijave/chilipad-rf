@@ -167,6 +167,8 @@ class App:
         self.allf = None
         self.evtf = None
         self._bg_widgets: list[tk.Widget] = []
+        self.session = 0  # bumped on every schedule/cancel; stale callbacks drop
+        self._pending: list[str] = []  # after() ids of this session's start cmds
 
         root.title("chilipad-rf capture")
         root.geometry("1200x700")
@@ -338,26 +340,42 @@ class App:
         self.state = "recording"
         self._set_bg(REC_BG)
         self.clock_txt = "+0.0"
+        self._cancel_pending()
         for dev in self.devices:
             self._schedule(dev, self.start_e[dev.key].get())
 
+    def _cancel_pending(self) -> None:
+        """Drop every queued start command and invalidate any already in flight."""
+        for aid in self._pending:
+            # Tk ignores ids that already fired, so no need to track completion.
+            self.root.after_cancel(aid)
+        self._pending.clear()
+        self.session += 1
+
     def _schedule(self, dev: Device, cmds: str) -> None:
         """Send space-separated commands 100 ms apart; 'cmd@sec' runs at sec."""
+        s = self.session
         for i, tok in enumerate(cmds.split()):
             cmd, _, at = tok.partition("@")
             try:
                 ms = int(float(at) * 1000) if at else i * 100
             except ValueError:
                 ms = i * 100
-            self.root.after(ms, lambda d=dev, c=cmd, m=ms: self._send(d, c, m))
+            self._pending.append(
+                self.root.after(
+                    ms, lambda d=dev, c=cmd, m=ms, s=s: self._send(d, c, m, s)
+                )
+            )
 
-    def _send(self, dev: Device, cmd: str, ms: int) -> None:
-        if self.state not in ("recording", "stopping"):
+    def _send(self, dev: Device, cmd: str, ms: int, session: int) -> None:
+        if session != self.session or self.state not in ("recording", "stopping"):
             return
         dev.send(cmd)
         self._event(f"{time.monotonic() - self.t0:+.6f} {dev.key} cmd {cmd}")
 
     def stop_capture(self, reason: str) -> None:
+        if self.state in ("preroll", "recording"):
+            self._cancel_pending()
         if self.state == "preroll":
             self.state = "idle"
             self._close_files()
@@ -475,9 +493,130 @@ class App:
         self.root.after(50, self.tick)
 
 
+def headless_check() -> None:
+    """--selftest only: start/stop scheduling with a fake root, no display needed.
+
+    Starts a session with plain and 'cmd@sec' start commands, stops it early,
+    starts a second one, and checks no first-session command leaks into it.
+    """
+
+    class FakeRoot:
+        def __init__(self) -> None:
+            self.now = 0
+            self.jobs: dict[str, tuple[int, object]] = {}
+            self.n = 0
+
+        def after(self, ms, fn):
+            self.n += 1
+            aid = f"after#{self.n}"
+            self.jobs[aid] = (self.now + ms, fn)
+            return aid
+
+        def after_cancel(self, aid) -> None:
+            self.jobs.pop(aid, None)
+
+        def run_until(self, t: int) -> None:
+            while True:
+                due = [(at, aid) for aid, (at, _) in self.jobs.items() if at <= t]
+                if not due:
+                    break
+                at, aid = min(due, key=lambda x: (x[0], int(x[1].split("#")[1])))
+                self.now = at
+                self.jobs.pop(aid)[1]()
+            self.now = t
+
+    class Stub:
+        def __init__(self, text: str = "") -> None:
+            self.text = text
+
+        def get(self) -> str:
+            return self.text
+
+        def config(self, **kw) -> None:
+            pass
+
+    class Log:
+        def __init__(self) -> None:
+            self.lines: list[str] = []
+
+        def write(self, s: str) -> None:
+            self.lines.append(s.strip())
+
+        def flush(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    root = FakeRoot()
+    sent: list[tuple[int, str, str]] = []
+    devices = []
+    for key in ("esp", "nrf"):
+        d = Device(key, "none")
+        d.send = lambda c, k=key: sent.append((root.now, k, c))  # type: ignore[method-assign]
+        devices.append(d)
+    app = App.__new__(App)
+    app.root, app.devices, app.selftest = root, devices, False
+    app.by_key = {d.key: d for d in devices}
+    app.state, app.session, app._pending = "idle", 0, []
+    app.allf = app.evtf = None
+    app._bg_widgets = []
+    app.rem_lbl = app.btn = app.status_lbl = Stub()
+    app.start_e = {"esp": Stub("p"), "nrf": Stub("a b x20@5")}
+    app.stop_e = {"esp": Stub("p"), "nrf": Stub("p q")}
+    app.session_dir = Path("/nonexistent")
+
+    def begin() -> Log:
+        log = Log()
+        app.evtf = log
+        app.state, app.t0 = "recording", time.monotonic()
+        app._cancel_pending()
+        for dev in devices:
+            app._schedule(dev, app.start_e[dev.key].get())
+        return log
+
+    # Session 1: let plain cmds go out, stop at 1 s before x20@5 fires.
+    log1 = begin()
+    root.run_until(1000)
+    assert [c for _, _, c in sent] == ["p", "a", "b"], sent
+    assert sum(" cmd " in s for s in log1.lines) == 3, log1.lines
+    app.stop_capture("selftest")
+    assert app._pending == [], app._pending
+    root.run_until(2000)  # stop cmds + _finish_stop
+    stop_sent = [(k, c) for t, k, c in sent if t >= 1000]
+    assert stop_sent == [("esp", "p"), ("nrf", "p"), ("nrf", "q")], stop_sent
+    assert app.state == "idle", app.state
+
+    # Session 2 starts at 3 s; session 1's x20 (due at 5 s) must not fire.
+    root.run_until(3000)
+    del sent[:]
+    log2 = begin()
+    root.run_until(7000)
+    want = [(3000, "esp", "p"), (3000, "nrf", "a"), (3100, "nrf", "b")]
+    assert sent == want, sent
+    root.run_until(8000)  # session 2's own x20@5
+    assert sent == want + [(8000, "nrf", "x20")], sent
+    assert sum(" cmd " in s for s in log2.lines) == 4, log2.lines
+
+    # A stale callback that slips past cancel is still dropped by session tag.
+    stale = app.session - 1
+    n = len(sent)
+    app._send(devices[1], "x20", 0, stale)
+    assert len(sent) == n, sent
+    print("headless check ok: stop cancels pending start commands")
+
+
 def main() -> None:
     args = parse_args()
-    root = tk.Tk()
+    if args.selftest:
+        headless_check()
+    try:
+        root = tk.Tk()
+    except tk.TclError as e:
+        if not args.selftest:
+            raise
+        print(f"GUI selftest skipped: {e}")
+        sys.exit(0)
     devices = [Device("esp", args.esp), Device("nrf", args.nrf)]
     app = App(root, devices, Path(args.out).expanduser(), args.selftest)
     fields = [(app.dur_e, args.duration), (app.note_e, args.note)]
