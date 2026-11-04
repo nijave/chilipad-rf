@@ -67,6 +67,9 @@
 #include <hal/nrf_radio.h>
 #include <hal/nrf_timer.h>
 
+#include <zephyr/drivers/clock_control/nrf_clock_control.h>
+#include <zephyr/sys/onoff.h>
+
 /* ------------------------------------------------------------------------- */
 /* Tunables and fixed sizes                                                  */
 /* ------------------------------------------------------------------------- */
@@ -358,32 +361,33 @@ static void out_line(const char *s)
 	line_flush();
 }
 
-/* Move queued output into the UART as long as it accepts bytes.  Bytes held
- * back by the UART stay in g_tx_chunk, so nothing is lost or reordered. */
+/* Move queued output into the CDC ACM driver.  The USB device_next CDC ACM
+ * driver only schedules a USB transfer from uart_poll_out() (uart_fifo_fill()
+ * merely fills its ring and relies on the TX interrupt path), so bytes go out
+ * through poll_out.  With flow control off, poll_out never sleeps: a full
+ * driver ring discards the byte.  TX_PUMP_BUDGET bytes per main-loop pass
+ * (1 ms) keeps that from happening at realistic packet rates. */
+#define TX_PUMP_BUDGET 512
 static void tx_pump(void)
 {
-	static uint8_t chunk[TX_CHUNK_BYTES];
-	static size_t  pos;
-	static size_t  have;
+	uint8_t  chunk[TX_CHUNK_BYTES];
+	uint32_t budget = TX_PUMP_BUDGET;
 
 	if (!g_console_ok) {
 		return;
 	}
 
-	for (;;) {
-		if (pos == have) {
-			have = (size_t)ring_buf_get(&g_tx_rb, chunk, sizeof(chunk));
-			pos = 0;
-			if (have == 0u) {
-				return;
-			}
-		}
-		int sent = uart_fifo_fill(console_dev, chunk + pos, (int)(have - pos));
+	while (budget > 0u) {
+		uint32_t have = ring_buf_get(&g_tx_rb, chunk,
+					     MIN(sizeof(chunk), budget));
 
-		if (sent <= 0) {
+		if (have == 0u) {
 			return;
 		}
-		pos += (size_t)sent;
+		for (uint32_t i = 0; i < have; i++) {
+			uart_poll_out(console_dev, chunk[i]);
+		}
+		budget -= have;
 	}
 }
 
@@ -391,30 +395,39 @@ static void tx_pump(void)
 /* Radio configuration                                                       */
 /* ------------------------------------------------------------------------- */
 
-/* Start the 32 MHz crystal and wait until it is really on.  USB may already
- * have it running through Zephyr's clock driver, in which case the task is a
- * no-op and no event is generated. */
+static bool hfxo_running(void)
+{
+	uint32_t stat = NRF_CLOCK->HFCLKSTAT;
+
+	return ((stat & CLOCK_HFCLKSTAT_STATE_Msk) != 0u) &&
+	       ((stat & CLOCK_HFCLKSTAT_SRC_Msk) ==
+		(CLOCK_HFCLKSTAT_SRC_Xtal << CLOCK_HFCLKSTAT_SRC_Pos));
+}
+
+/* Request the 32 MHz crystal through Zephyr's clock driver and hold the
+ * request forever.  Poking HFCLKSTART directly races the driver: its ISR eats
+ * the HFCLKSTARTED event, and it stops the crystal when its own users (USB)
+ * release it, which would leave the radio on the inaccurate RC oscillator. */
+static struct onoff_client g_hfxo_cli;
+
 static void hfxo_start(void)
 {
-	bool running = ((NRF_CLOCK->HFCLKSTAT & CLOCK_HFCLKSTAT_STATE_Msk) != 0u) &&
-		       ((NRF_CLOCK->HFCLKSTAT & CLOCK_HFCLKSTAT_SRC_Msk) ==
-			(CLOCK_HFCLKSTAT_SRC_Xtal << CLOCK_HFCLKSTAT_SRC_Pos));
+	struct onoff_manager *mgr =
+		z_nrf_clock_control_get_onoff(CLOCK_CONTROL_NRF_SUBSYS_HF);
+	int res = 0;
 
-	if (running) {
-		g_hfxo_ok = true;
+	sys_notify_init_spinwait(&g_hfxo_cli.notify);
+	if (onoff_request(mgr, &g_hfxo_cli) < 0) {
+		g_hfxo_ok = false;
 		return;
 	}
-
-	nrf_clock_event_clear(NRF_CLOCK, NRF_CLOCK_EVENT_HFCLKSTARTED);
-	nrf_clock_task_trigger(NRF_CLOCK, NRF_CLOCK_TASK_HFCLKSTART);
-	g_hfxo_ok = false;
-	for (int i = 0; i < 20000; i++) { /* up to 20 ms */
-		if (nrf_clock_event_check(NRF_CLOCK, NRF_CLOCK_EVENT_HFCLKSTARTED)) {
-			g_hfxo_ok = true;
+	for (int i = 0; i < 2000; i++) { /* up to ~20 ms */
+		if (sys_notify_fetch_result(&g_hfxo_cli.notify, &res) == 0) {
 			break;
 		}
-		k_busy_wait(1);
+		k_busy_wait(10);
 	}
+	g_hfxo_ok = hfxo_running();
 }
 
 /* Program BASE0/PREFIX0 from the user supplied on-air address.  See the long
@@ -552,7 +565,7 @@ static void radio_isr(const void *arg)
 	 * flipped for it yet, so (g_cur ^ 1) is still the buffer that ended. */
 	if (nrf_radio_event_check(NRF_RADIO, NRF_RADIO_EVENT_END)) {
 		uint8_t done = (uint8_t)(g_cur ^ 1u);
-		int8_t rssi = (int8_t)nrf_radio_rssi_sample_get(NRF_RADIO);
+		int8_t rssi = (int8_t)-(int)nrf_radio_rssi_sample_get(NRF_RADIO); /* RSSISAMPLE is -dBm */
 
 		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_END);
 		push_packet(done, g_isr_ts, rssi);
@@ -790,8 +803,8 @@ static void print_config(void)
 
 	line_reset();
 	line_str("BASE0         : 0x");
-	for (int shift = 28; shift >= 0; shift -= 4) {
-		line_hex_byte((uint8_t)((g_base0_written >> shift) & 0xFu));
+	for (int shift = 24; shift >= 0; shift -= 8) {
+		line_hex_byte((uint8_t)((g_base0_written >> shift) & 0xFFu));
 	}
 	line_str("\r\n");
 	line_flush();
@@ -804,7 +817,7 @@ static void print_config(void)
 
 	line_reset();
 	line_str("HFXO          : ");
-	line_str(g_hfxo_ok ? "running\r\n" : "NOT RUNNING\r\n");
+	line_str(hfxo_running() ? "running\r\n" : "NOT RUNNING\r\n");
 	line_flush();
 
 	line_reset();
@@ -933,7 +946,7 @@ static void energy_scan(uint32_t seconds)
 					break;
 				}
 
-				int8_t rssi = (int8_t)nrf_radio_rssi_sample_get(NRF_RADIO);
+				int8_t rssi = (int8_t)-(int)nrf_radio_rssi_sample_get(NRF_RADIO); /* RSSISAMPLE is -dBm */
 
 				if (rssi > g_scan_max[ch]) {
 					g_scan_max[ch] = rssi;
@@ -1229,8 +1242,8 @@ static void cmd_set_addr(const char *arg)
 	line_str("[addr] BALEN=");
 	line_u32(g_balen_written);
 	line_str(" BASE0=0x");
-	for (int shift = 28; shift >= 0; shift -= 4) {
-		line_hex_byte((uint8_t)((g_base0_written >> shift) & 0xFu));
+	for (int shift = 24; shift >= 0; shift -= 8) {
+		line_hex_byte((uint8_t)((g_base0_written >> shift) & 0xFFu));
 	}
 	line_str(" PREFIX0=0x");
 	line_hex_byte((uint8_t)(g_prefix0_written & 0xFFu));
@@ -1316,6 +1329,16 @@ static void handle_command(const char *cmd)
 	const char *arg = cmd + 1;
 	uint32_t num = 0;
 	bool has_num = parse_u32(arg, &num);
+
+	/* "!boot": reboot into the Nordic open USB DFU bootloader without the
+	 * RESET button.  The bootloader stays in DFU mode when GPREGRET holds
+	 * BOOTLOADER_DFU_START (0xB1).  Full word only, so a stray '!' is ignored. */
+	if (strcmp(cmd, "!boot") == 0) {
+		radio_stop_rx();
+		k_msleep(50);
+		NRF_POWER->GPREGRET = 0xB1;
+		NVIC_SystemReset();
+	}
 
 	switch (letter) {
 	case 'h':

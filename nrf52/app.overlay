@@ -1,0 +1,5 @@
+/* Larger CDC ACM TX FIFO: one 255 byte capture prints as a ~1.1 kB line, and
+ * uart_poll_out() discards bytes when this FIFO is full (flow control off). */
+&board_cdc_acm_uart {
+	tx-fifo-size = <8192>;
+};
