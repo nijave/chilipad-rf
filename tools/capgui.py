@@ -105,7 +105,10 @@ def reader_loop(dev: Device, q: queue.Queue, stop: threading.Event) -> None:
         try:
             ser = serial.Serial()
             ser.port, ser.baudrate = dev.port, BAUD
-            ser.dtr = False  # do not reset the ESP8266 on open
+            # ESP8266: DTR/RTS low so opening the port does not reset it.
+            # nRF52 CDC ACM: the Zephyr USB stack ignores the port until the
+            # host asserts DTR, so raise it there.
+            ser.dtr = dev.key != "esp"
             ser.rts = False
             ser.timeout = 0.2
             ser.open()
