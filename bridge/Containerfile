@@ -1,0 +1,40 @@
+# ChiliPad Cube MQTT bridge (chilipad_bridge.py) as an OCI image.
+#
+# Build both architectures with ./build.sh. Single-arch local build:
+#   podman build -t chilipad-bridge:dev -f Containerfile .
+#
+# Only chilipad_bridge.py goes into the image. The --selftest mode reads
+# captures/ and analysis/ from the repo, so run it from a checkout, not here.
+#
+# Serial access: the image runs as the non-root user "chilipad" (UID 10001).
+# It does not run as root to open the dongle. Rootless Podman passes the host
+# device node through with its host owner (root:dialout, mode 0660). Run with
+# --group-add keep-groups (quadlet GroupAdd=keep-groups) so the process keeps
+# the host user's supplementary groups, including dialout. See README.md.
+
+FROM docker.io/library/python:3.12.16-slim-trixie
+
+ARG VERSION=dev
+
+LABEL org.opencontainers.image.title="chilipad-bridge" \
+      org.opencontainers.image.description="Home Assistant MQTT bridge for the ChiliPad Cube through the chilipad-sniffer nRF52840 dongle" \
+      org.opencontainers.image.source="https://github.com/nijave/chilipad-rf" \
+      org.opencontainers.image.version="${VERSION}"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_ROOT_USER_ACTION=ignore
+
+# Dependencies from the PEP 723 header of chilipad_bridge.py.
+RUN pip install --no-cache-dir "pyserial==3.5" "paho-mqtt>=2.0,<3" \
+ && useradd --uid 10001 --user-group --no-create-home \
+        --home-dir /nonexistent --shell /usr/sbin/nologin chilipad
+
+COPY --chmod=0644 chilipad_bridge.py /app/chilipad_bridge.py
+
+USER 10001:10001
+WORKDIR /app
+
+ENTRYPOINT ["python", "/app/chilipad_bridge.py"]

@@ -1,0 +1,52 @@
+# Podman quadlet: ChiliPad Cube MQTT bridge, rootless user unit.
+#
+# Install on the Pine A64:
+#   ~/.config/containers/systemd/chilipad-bridge.container
+#   ~/.config/chilipad-bridge.env   (mode 0600, see chilipad-bridge.env.example)
+#   systemctl --user daemon-reload && systemctl --user start chilipad-bridge
+#   sudo loginctl enable-linger "$USER"   (start at boot without a login)
+#
+# This is a user unit (not /etc/containers/systemd/) so that the container
+# runs rootless, the env file with the MQTT password stays in the owner's
+# home, and `podman auto-update` runs from the user's own timer.
+
+[Unit]
+Description=ChiliPad Cube MQTT bridge (container)
+
+[Container]
+Image=registry.example.com/chilipad-bridge:latest
+AutoUpdate=registry
+ContainerName=chilipad-bridge
+
+# CHILIPAD_MQTT_HOST, CHILIPAD_MQTT_USER, CHILIPAD_MQTT_PASSWORD, ...
+EnvironmentFile=%h/.config/chilipad-bridge.env
+
+# The dongle. AddDevice does not expand globs: replace the path with the
+# exact name from `ls -l /dev/serial/by-id/` (usb-ZEPHYR_chilipad-sniffer_<serial>-if00).
+# The node appears in the container as /dev/chilipad. The bridge cannot
+# auto-detect it there (the container's /sys shows host names such as
+# ttyACM1, not /dev/chilipad), so CHILIPAD_PORT names it.
+AddDevice=/dev/serial/by-id/usb-ZEPHYR_chilipad-sniffer_REPLACE_ME-if00:/dev/chilipad
+Environment=CHILIPAD_PORT=/dev/chilipad
+
+# Keep the host user's supplementary groups (dialout) so the non-root
+# container user can open the device (root:dialout 0660 on the host).
+# Needs crun. Podman older than 5.0 has no GroupAdd= key:
+# use PodmanArgs=--group-add keep-groups instead.
+GroupAdd=keep-groups
+
+# The bridge only makes an outgoing MQTT connection, so the default rootless
+# network (pasta) is enough. Use Network=host if the broker runs on the Pine
+# itself and listens only on 127.0.0.1.
+#Network=host
+
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=ALL
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

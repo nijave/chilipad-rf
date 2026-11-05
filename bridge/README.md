@@ -77,6 +77,151 @@ CHILIPAD_MQTT_PASSWORD=change-me
 
 Then `systemctl daemon-reload && systemctl enable --now chilipad-bridge`.
 
+## Container (Podman quadlet)
+
+Files:
+
+* `Containerfile`: `python:3.12.16-slim-trixie`, pip installs `pyserial`
+  and `paho-mqtt>=2.0`, copies only `chilipad_bridge.py` to `/app`. The image
+  runs as the non-root user `chilipad` (UID 10001). `--selftest` does not work
+  in the image (it needs `captures/` from the repo). Run it from a checkout.
+* `build.sh`: builds a manifest list for `linux/amd64` and `linux/arm64`.
+* `chilipad-bridge.container`: rootless quadlet (user unit) for the Pine A64.
+* `chilipad-bridge.env.example`: example env file, no secrets.
+
+### Build and push
+
+On the build machine (x86_64, with `qemu-user-static` for arm64):
+
+```sh
+cd bridge
+./build.sh                    # tag YYYYMMDD-<script sha> and latest, no push
+./build.sh --tag 1.0.0        # explicit tag
+podman run --rm registry.example.com/chilipad-bridge:latest --help
+podman run --rm --platform linux/arm64 registry.example.com/chilipad-bridge:latest --help
+```
+
+Push is manual:
+
+```sh
+podman login registry.example.com
+./build.sh --push             # pushes :<tag> and :latest (both architectures)
+```
+
+### Install on the Pine
+
+The quadlet is a user unit. The container runs rootless, the env file stays
+in your home, and auto-update runs from your own timer.
+
+1. Let your user open the dongle, and keep user units running without a login:
+
+   ```sh
+   sudo usermod -aG dialout "$USER"     # log out and in again
+   sudo loginctl enable-linger "$USER"
+   ```
+
+2. Find the dongle's stable path. Quadlet `AddDevice=` does not expand globs,
+   so you must use the exact name:
+
+   ```sh
+   ls -l /dev/serial/by-id/
+   # usb-ZEPHYR_chilipad-sniffer_<serial>-if00 -> ../../ttyACM0
+   ```
+
+3. Install the unit and the env file:
+
+   ```sh
+   mkdir -p ~/.config/containers/systemd
+   cp chilipad-bridge.container ~/.config/containers/systemd/
+   cp chilipad-bridge.env.example ~/.config/chilipad-bridge.env
+   chmod 600 ~/.config/chilipad-bridge.env
+   ```
+
+   Edit `~/.config/containers/systemd/chilipad-bridge.container`. Replace the
+   `REPLACE_ME` path in `AddDevice=` with the name from step 2. Keep the
+   `:/dev/chilipad` suffix. Edit `~/.config/chilipad-bridge.env` and set
+   `CHILIPAD_MQTT_HOST`, `CHILIPAD_MQTT_USER` and `CHILIPAD_MQTT_PASSWORD`.
+   Podman reads it with `--env-file`: `KEY=value`, no quotes, no `export`.
+
+4. If the registry requires a login to pull, log in with a persistent auth
+   file. A reboot clears the default file in `$XDG_RUNTIME_DIR`, and
+   then auto-update cannot pull:
+
+   ```sh
+   podman login --authfile ~/.config/containers/auth.json registry.example.com
+   ```
+
+5. Start it:
+
+   ```sh
+   podman pull registry.example.com/chilipad-bridge:latest
+   systemctl --user daemon-reload
+   systemctl --user start chilipad-bridge
+   systemctl --user status chilipad-bridge
+   journalctl --user -u chilipad-bridge -f
+   ```
+
+   Quadlet generates the service, so `systemctl --user enable` is not used.
+   The `[Install] WantedBy=default.target` line starts it at boot (with
+   lingering on).
+
+How the device works: `AddDevice=` puts the dongle in the container as
+`/dev/chilipad`, and `Environment=CHILIPAD_PORT=/dev/chilipad` points the
+bridge at it. The bridge does not auto-detect the port in the container: the
+container's `/sys` shows host names such as `ttyACM0`, not `/dev/chilipad`.
+`GroupAdd=keep-groups` keeps your host groups (`dialout`) for the non-root
+container user, so the device (`root:dialout`, mode 0660) opens without root.
+It needs the `crun` runtime (the default on current Podman). Podman older than
+5.0 has no `GroupAdd=` key. Use `PodmanArgs=--group-add keep-groups` there.
+For a rootful system unit (`/etc/containers/systemd/`), use
+`GroupAdd=<dialout GID>` (`getent group dialout`) instead.
+
+The default rootless network (pasta) is enough for an outgoing MQTT
+connection. Set `Network=host` only if the broker runs on the Pine and
+listens on `127.0.0.1` only.
+
+### Auto-update
+
+The unit has `AutoUpdate=registry`. Turn on the user timer once:
+
+```sh
+systemctl --user enable --now podman-auto-update.timer
+podman auto-update --dry-run          # show what would update
+podman auto-update                    # update now
+```
+
+The timer (daily) pulls `:latest`. If the digest changed, it restarts the
+unit, and rolls back if the new container does not start.
+
+### Troubleshooting
+
+* `Permission denied: '/dev/chilipad'`: check `ls -l /dev/ttyACM*` on the
+  host (expect `root dialout ... 0660`) and `id` (expect `dialout`). After
+  `usermod`, log out and in, then restart the user manager
+  (`sudo systemctl restart user@$(id -u)`) or reboot, so that the units get
+  the new group. Check `podman info --format '{{.Host.OCIRuntime.Name}}'`
+  prints `crun`.
+* `no such file or directory` for the `AddDevice` path: the by-id name is
+  wrong or the dongle is not in the USB port. Run `ls -l /dev/serial/by-id/` again.
+  The name includes the board's serial number, so a different dongle has a
+  different name.
+* Dongle unplugged and plugged in again: the container keeps the old device
+  node, and the bridge retries forever. Run
+  `systemctl --user restart chilipad-bridge`.
+* SELinux hosts: if `ausearch -m avc` shows denials for the tty, run
+  `sudo setsebool -P container_use_devices=1`.
+* `--mqtt-host (or CHILIPAD_MQTT_HOST) is required`: the env file is missing
+  or has the wrong path (`%h/.config/chilipad-bridge.env`).
+* Send one setpoint by hand (stop the service first, the port is exclusive):
+
+  ```sh
+  systemctl --user stop chilipad-bridge
+  podman run --rm --group-add keep-groups \
+      --device /dev/serial/by-id/usb-ZEPHYR_chilipad-sniffer_<serial>-if00:/dev/chilipad \
+      registry.example.com/chilipad-bridge:latest --port /dev/chilipad --once 72
+  systemctl --user start chilipad-bridge
+  ```
+
 ## Home Assistant
 
 * Discovery: `homeassistant/climate/<unique_id>/config` (retained). The
