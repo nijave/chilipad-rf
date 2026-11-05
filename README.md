@@ -1,4 +1,22 @@
-# chilipad-rf — nRF24L01+ promiscuous sniffer for an LT8920 remote
+# chilipad-rf — ChiliPad Cube remote: sniffer, decoder and controller
+
+Status (2026-11-04): protocol decoded; the Cube takes commands from an
+nRF52840 dongle. The remote is an LT8920 at 62.5 kbit/s on
+2450 MHz with the chip's default sync word; packet `07 A5 <cmd> SP 40 40 00
+(cmd+SP-0x80)` with CRC-16/KERMIT, `cmd` 0x44 = set/on, 0x50 = off. Details
+in `analysis/burst-structure.md`.
+
+- `nrf52/` — Zephyr firmware for the PCA10059 dongle: sniffer, replay, and
+  the `S<degF>` / `O<degF>` controller commands (`nrf52/README.md`).
+- `bridge/` — serial → MQTT bridge exposing the Cube as a Home Assistant
+  climate entity (`bridge/README.md`).
+- `tools/capgui.py` — capture GUI with a visible clock for filmed runs.
+- `analysis/` — decoder, encoder, burst generators and write-ups.
+- `captures/` — raw capture logs.
+- The ESP8266 + nRF24L01+ sketch below is the original sniffer; it still
+  serves as a second receiver for checking the dongle's transmissions.
+
+## Original sniffer (ESP8266 + nRF24L01+)
 
 ESP8266 (D1 mini / NodeMCU) firmware that puts an nRF24L01+ into Travis
 Goodspeed's "promiscuous mode" (illegal 2-byte address width) to sniff a
