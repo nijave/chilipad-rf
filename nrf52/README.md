@@ -61,9 +61,12 @@ it with any serial terminal, 115200 baud (the CDC ACM baud rate is ignored).
 | `t2<hex>` | load TX segment 2 (same rules). `t2` alone clears segment 2 |
 | `t` | clear both TX segments |
 | `z<n>` | send the loaded segments `n` times (default 1, max 1000, 5 ms apart, radio disabled between bursts) on the current channel `c`; segment 2 follows segment 1 back to back (see below); then restore the previous state and print `[tx] sent=<n> segs=<m> timeouts=<k>` |
-| `m<rate>` | data rate for RX and TX: `m1` = `Nrf_1Mbit` (default), `m2` = `Nrf_2Mbit`, `m250` = `Nrf_250Kbit` (see below). Only `MODE` changes; address, `PCNF0`/`PCNF1`, CRC off and bit reversal stay the same. If capture is on, the firmware stops it and starts it again in the new mode |
+| `m<rate>` | data rate for RX and TX: `m1` = `Nrf_1Mbit`, `m2` = `Nrf_2Mbit`, `mb1` = `Ble_1Mbit` (default), `mb2` = `Ble_2Mbit`, `m250` = `Nrf_250Kbit` (see below). Only `MODE` changes; address, `PCNF0`/`PCNF1`, CRC off and bit reversal stay the same. If capture is on, the firmware stops it and starts it again in the new mode |
 | `k<ms>` | unmodulated carrier for `<ms>` ms (1..5000) on the current channel `c`: `MODECNF0.DTX = Center`, `TXEN`, wait for `READY`, stay in `TXIDLE`, then `DISABLE` and restore `MODECNF0`. Stops capture first and restores it after. Prints `[k] carrier <mode> <ms> ms done` |
 | `k<ms>b0` / `k<ms>b1` | same, but `DTX = B0` / `B1`: the constant '0' / '1' FSK tone instead of the center frequency (`<mode>` is `b0` / `b1`) |
+| `S<degF>[,<n>]` | set the Cube to `<degF>` (55..93): encode the press burst, send it `n` times (default 1, max 10, 100 ms apart), print `[S] <degF> sent`. See [Setting the Cube's temperature](#setting-the-cubes-temperature-s) |
+| `O<degF>[,<n>]` | power the Cube OFF (command byte `0x50`). `<degF>` is the Cube's current setpoint, 55..93 (the dongle does not know it). Prints `[O] OFF @ <degF> sent`. Power ON is any `S<degF>` |
+| `T<degF>` / `TO<degF>` | print `addr1 seg1 addr2 seg2` (hex) of the `S<degF>` / `O<degF>` burst, the same line `analysis/scripts/gen_burst2.py <degF>` (or `nrf52/tools/gen_burst2_cmd.py <degF> 50`) prints. Sends nothing |
 | `d` | radio register dump, ISR counters, `[d] rate=<mode> us_per_byte=<n>`, and TX totals `[d] tx ready=<n> end=<n> timeouts=<n> last_gap_us=<n>` |
 
 Output is one line per packet:
@@ -201,7 +204,7 @@ receivers.
 
 * `PCNF0`: `LFLEN=0`, `S0LEN=0`, `S1LEN=0`, 8-bit preamble; `PCNF1`:
   `STATLEN=MAXLEN=len`, `BALEN=alent-1`, `ENDIAN=Big`, whitening off; CRC off
-  (`CRCCNF.LEN=0`); `TXPOWER=0 dBm`; `MODE=Nrf_1Mbit` by default (`m`
+  (`CRCCNF.LEN=0`); `TXPOWER=0 dBm`; `MODE=Ble_1Mbit` by default (`m`
   changes it); HFXO started before the radio is used.
 * Two payload buffers are alternated: the `ADDRESS` interrupt retargets
   `PACKETPTR` (latched by `START`) at the other buffer, the `END` interrupt
@@ -227,3 +230,81 @@ replay frames you captured from your own device.
 Only MODE changes. `j<ms>[b0|b1|c]` makes every `z` burst start with a
 carrier of that length (constant 1 by default, `b0` constant 0, `c`
 centre) that runs straight into the preamble with no gap; `j0` turns it off.
+
+## Setting the Cube's temperature (`S`)
+
+`S<degF>` builds the remote's setpoint press in the firmware and sends it.
+The range is 55..93 °F. Known-good radio settings are channel 50 and
+`Ble_1Mbit`: `c50 mb1`. Both are the boot defaults. `S` does not change the
+channel or the rate.
+
+```
+S74          send the 74 °F press once
+S74,3        send it 3 times, 100 ms apart (n = 1..10)
+O72          power OFF; 72 = the Cube's current setpoint
+O72,3        the same, 3 times
+T74          print addr1 seg1 addr2 seg2 for S74, send nothing
+TO72         print addr1 seg1 addr2 seg2 for O72, send nothing
+```
+
+Output of `S74`:
+
+```
+[z] ch=50 addr=55555555 len1=154 len2=154 chain=END_START x1
+[tx] sent=1 segs=2 timeouts=0
+[z] seg gap=0 us beyond preamble+address (TIMER1, +/-1 us)
+[S] 74 sent
+```
+
+If a burst times out, the last line is `[S] 74 FAILED (<k> of <n> sent)`.
+`O72` prints the same lines, ending with `[O] OFF @ 72 sent`.
+
+How it works:
+
+1. `src/chili_encoder.h` encodes the packet
+   `07 A5 CMD SP 40 40 00 X` + CRC-16/KERMIT (low byte first), behind the
+   header `80 03 80 03 5A 5A 80 03`. `X = (CMD + SP - 0x80) & 0xFF`.
+   `S` uses `CMD = 0x44` (`X = SP-60`); `O` uses `CMD = 0x50` (power OFF,
+   for example `07 A5 50 48 40 40 00 18` at 72 °F). Power ON is a normal
+   `0x44` press. Each nibble (low nibble first) becomes its
+   64-bit codeword. This is a C port of `encode()` in
+   `analysis/scripts/decode.py` (see `analysis/burst-structure.md`).
+2. It splits the 2320-bit stream into two equal 154-byte nRF52 packets, as
+   `analysis/scripts/gen_burst2.py` does. The split is at stream bit 1053,
+   where the stream itself contains an nRF preamble byte. That point is
+   inside the codeword of packet byte `07`, so it is the same for every
+   command and setpoint. The encoder checks the preamble pattern anyway and
+   refuses to send if it is missing.
+3. `S` loads the result as `w<addr1> v<addr2> t1<seg1> t2<seg2>` would
+   (`addr1` = `55555555`), and sends it through the `z` path. The `o` and `r`
+   settings apply as for `w`/`v`. A `j` lead-in also applies.
+4. After the send, `S` puts back the previous `w` trigger address. Segments 1
+   and 2 and the `v` address keep the burst; `t` and `v` clear them.
+
+This is the same as the manual sequence that was checked on hardware:
+
+```
+c50 mb1 w<addr1> v<addr2> t1<seg1> t2<seg2> z1
+```
+
+### Check the encoder
+
+Without hardware, on the laptop (needs `cc` and `python3`):
+
+```sh
+nrf52/tools/encoder_check.sh
+```
+
+It compiles `tools/encoder_check.c` against `src/chili_encoder.h` and compares
+its output for every setpoint from 55 to 93 with `gen_burst2.py` (`set`) and
+with `tools/gen_burst2_cmd.py` for command `0x44` (`set-cmd`) and `0x50`
+(`off`). `gen_burst2_cmd.py` is `gen_burst2.py` with the command byte
+patched in. Each line says `OK` or `MISMATCH`.
+
+On the dongle, compare `T<degF>` with the Python output for the same
+setpoint:
+
+```sh
+python3 analysis/scripts/gen_burst2.py 74        # = T74
+python3 nrf52/tools/gen_burst2_cmd.py 72 50      # = TO72
+```

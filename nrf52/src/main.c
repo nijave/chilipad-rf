@@ -71,6 +71,8 @@
 #include <zephyr/drivers/clock_control/nrf_clock_control.h>
 #include <zephyr/sys/onoff.h>
 
+#include "chili_encoder.h"
+
 /* ------------------------------------------------------------------------- */
 /* Tunables and fixed sizes                                                  */
 /* ------------------------------------------------------------------------- */
@@ -135,7 +137,8 @@ enum data_rate {
 	RATE_BLE1M,   /* 1 Mbit, +/-250 kHz deviation (vs +/-170 kHz for Nrf_1Mbit) */
 	RATE_BLE2M,   /* 2 Mbit, +/-500 kHz deviation */
 };
-static uint8_t  g_rate      = RATE_1M;
+/* Boot default mb1: with c50 the known-good setting for the Cube ("S"). */
+static uint8_t  g_rate      = RATE_BLE1M;
 
 /* Carrier lead-in before a 'z' burst ('j'): the radio sits in TXIDLE for
  * this long, emitting DTX (B1 by default), then START follows with no gap. */
@@ -1043,7 +1046,8 @@ static void print_help(void)
 	out_line("             't' alone clears both segments");
 	out_line("z<n>         send seg1 (+ seg2 back-to-back) n times, 1..1000");
 	out_line("             (default 1), each seg = preamble + 'w' addr + payload");
-	out_line("m<rate>      data rate for RX and TX: m1 = 1 Mbit (default), m2 = 2 Mbit");
+	out_line("m<rate>      data rate for RX and TX: m1 = 1 Mbit, m2 = 2 Mbit,");
+	out_line("             mb1 = BLE 1 Mbit (default), mb2 = BLE 2 Mbit");
 	out_line(HAVE_RATE_250K ? "             m250 = 250 kbit (deprecated on nRF52840)"
 				: "             (m250 = 250 kbit: not in this MDK, rejected)");
 	out_line("j<ms>[b0|b1|c] carrier lead-in before each z burst, 0 = off (b1 default)");
@@ -1051,6 +1055,11 @@ static void print_help(void)
 	out_line("k<ms>        unmodulated carrier for 1..5000 ms on channel c;");
 	out_line("             k<ms>b0 / k<ms>b1 = constant '0' / '1' tone (DTX B0/B1)");
 	out_line("d            radio register dump + ISR and TX counters");
+	out_line("S<F>[,<n>]   set the Cube to <F> degF (55..93): encode + send the burst");
+	out_line("             n times (1..10, default 1, 100 ms apart); use c50 mb1");
+	out_line("O<F>[,<n>]   power the Cube OFF; <F> = its current setpoint (55..93)");
+	out_line("             (power ON = any S<F>)");
+	out_line("T<F> / TO<F> print addr1 seg1 addr2 seg2 of S<F> / O<F>, send nothing");
 	out_line("");
 	print_config();
 }
@@ -1603,7 +1612,9 @@ timeout:
 	return segs;
 }
 
-static void tx_segments(uint32_t times)
+/* Send the loaded segments 'times' times (1..1000, 0 = 1), 'gap_ms' apart.
+ * Returns the number of complete bursts. */
+static uint32_t tx_segments_gap(uint32_t times, uint32_t gap_ms)
 {
 	bool was_capturing = g_capturing;
 	bool two = (g_tx_seg_len[1] != 0u);
@@ -1616,7 +1627,7 @@ static void tx_segments(uint32_t times)
 
 	if (g_tx_seg_len[0] == 0u) {
 		out_line("[z] segment 1 is empty; load it with t<hex> or t1<hex>");
-		return;
+		return 0;
 	}
 	if (times == 0u) {
 		times = 1;
@@ -1678,7 +1689,7 @@ static void tx_segments(uint32_t times)
 		}
 		sent++;
 		if (i + 1u < times) {
-			k_msleep(5); /* ~5 ms between bursts, radio disabled */
+			k_msleep((int32_t)gap_ms); /* radio disabled in between */
 		}
 	}
 	g_tx_timeout_total += timeouts;
@@ -1692,6 +1703,12 @@ static void tx_segments(uint32_t times)
 		line_str(" us beyond preamble+address (TIMER1, +/-1 us)\r\n");
 		line_flush();
 	}
+	return sent;
+}
+
+static void tx_segments(uint32_t times)
+{
+	(void)tx_segments_gap(times, 5u); /* ~5 ms between 'z' bursts */
 }
 
 /* ------------------------------------------------------------------------- */
@@ -2098,6 +2115,143 @@ static void cmd_set_rate(const char *arg)
 	line_flush();
 }
 
+/* ------------------------------------------------------------------------- */
+/* Cube setpoint ('S' / 'T')                                                 */
+/* ------------------------------------------------------------------------- */
+
+#define SETPOINT_REPEAT_MAX  10u
+#define SETPOINT_GAP_MS      100u
+
+/* "<degF>[,<n>]" -> sp, n.  Returns false on bad syntax or range. */
+static bool parse_setpoint(const char *arg, uint32_t *sp, uint32_t *n,
+			   bool allow_count)
+{
+	char digits[8];
+	size_t len = 0;
+
+	while (arg[len] >= '0' && arg[len] <= '9' && len < sizeof(digits) - 1u) {
+		digits[len] = arg[len];
+		len++;
+	}
+	digits[len] = '\0';
+	if (len == 0u || !parse_u32(digits, sp) ||
+	    *sp < CHILI_SP_MIN || *sp > CHILI_SP_MAX) {
+		return false;
+	}
+	*n = 1u;
+	if (arg[len] == '\0') {
+		return true;
+	}
+	if (!allow_count || arg[len] != ',' || !parse_u32(arg + len + 1u, n) ||
+	    *n < 1u || *n > SETPOINT_REPEAT_MAX) {
+		return false;
+	}
+	return true;
+}
+
+/* "T<degF>" / "TO<degF>": print "addr1 seg1 addr2 seg2" for the setpoint
+ * (cmd 0x44) / power OFF (cmd 0x50) press, exactly as
+ * analysis/scripts/gen_burst2.py <degF> (or tools/gen_burst2_cmd.py
+ * <degF> 50) does, for a diff on the host.  Sends nothing. */
+static void cmd_setpoint_print(const char *arg)
+{
+	static struct chili_burst b;
+	uint8_t cmd = CHILI_CMD_SET;
+	uint32_t sp;
+	uint32_t n;
+
+	if (*arg == 'O') {
+		cmd = CHILI_CMD_OFF;
+		arg++;
+	}
+	if (!parse_setpoint(arg, &sp, &n, false) ||
+	    !chili_build_burst_cmd(cmd, (int)sp, &b)) {
+		out_line("[T] usage: T<degF> or TO<degF>, degF = 55..93");
+		return;
+	}
+	line_reset();
+	line_hex(b.addr1, sizeof(b.addr1));
+	line_ch(' ');
+	line_hex(b.seg1, sizeof(b.seg1));
+	line_ch(' ');
+	line_hex(b.addr2, sizeof(b.addr2));
+	line_ch(' ');
+	line_hex(b.seg2, sizeof(b.seg2));
+	line_str("\r\n");
+	line_flush();
+}
+
+/* "S<degF>[,<n>]" (cmd 0x44, set temperature / power ON) and
+ * "O<degF>[,<n>]" (cmd 0x50, power OFF; degF = the Cube's current setpoint):
+ * encode the burst, load it as if by "w<addr1> v<addr2> t1<seg1> t2<seg2>"
+ * and send it like 'z', n times (1..10) 100 ms apart.  Channel and rate stay
+ * as configured (c50 mb1 are the known-good settings).  The 'w' trigger
+ * address is restored afterwards; seg1/seg2 and the 'v' address keep the
+ * burst. */
+static void cmd_setpoint(uint8_t cmd, const char *arg)
+{
+	static struct chili_burst b;
+	const char *tag = (cmd == CHILI_CMD_OFF) ? "[O] " : "[S] ";
+	uint8_t saved_addr[sizeof(g_addr)];
+	uint8_t saved_len = g_addr_len;
+	uint32_t sp;
+	uint32_t n;
+	uint32_t sent;
+
+	if (!parse_setpoint(arg, &sp, &n, true)) {
+		out_line(cmd == CHILI_CMD_OFF
+			 ? "[O] usage: O<degF>[,<n>], degF = current setpoint 55..93, n = 1..10"
+			 : "[S] usage: S<degF>[,<n>], degF = 55..93, n = 1..10 (default 1)");
+		return;
+	}
+	if (!chili_build_burst_cmd(cmd, (int)sp, &b)) {
+		line_reset();
+		line_str(tag);
+		line_str("encoder failed (split point is not a preamble)\r\n");
+		line_flush();
+		return;
+	}
+
+	memcpy(saved_addr, g_addr, sizeof(g_addr));
+	memcpy(g_addr, b.addr1, CHILI_ADDR_LEN);
+	g_addr_len = CHILI_ADDR_LEN;
+	memcpy(g_addr2, b.addr2, CHILI_ADDR_LEN);
+	g_addr2_len = CHILI_ADDR_LEN;
+	memcpy(g_tx_seg[0], b.seg1, CHILI_SEG_LEN);
+	g_tx_seg_len[0] = CHILI_SEG_LEN;
+	memcpy(g_tx_seg[1], b.seg2, CHILI_SEG_LEN);
+	g_tx_seg_len[1] = CHILI_SEG_LEN;
+
+	sent = tx_segments_gap(n, SETPOINT_GAP_MS);
+
+	/* Back to the RX trigger address. */
+	memcpy(g_addr, saved_addr, sizeof(g_addr));
+	g_addr_len = saved_len;
+	radio_reconfigure();
+
+	line_reset();
+	line_str(tag);
+	if (cmd == CHILI_CMD_OFF) {
+		line_str("OFF @ ");
+	}
+	line_u32(sp);
+	if (sent == n) {
+		line_str(" sent");
+	} else {
+		line_str(" FAILED (");
+		line_u32(sent);
+		line_str(" of ");
+		line_u32(n);
+		line_str(" sent)");
+	}
+	if (n > 1u) {
+		line_str(" x");
+		line_u32(n);
+	}
+	line_str("\r\n");
+	line_flush();
+}
+
 /* "k<ms>[b0|b1]": carrier for 1..5000 ms, DTX Center unless b0/b1 is given. */
 static void cmd_carrier(const char *arg)
 {
@@ -2327,6 +2481,18 @@ static void handle_command(const char *cmd)
 
 	case 'm':
 		cmd_set_rate(arg);
+		break;
+
+	case 'S':
+		cmd_setpoint(CHILI_CMD_SET, arg);
+		break;
+
+	case 'O':
+		cmd_setpoint(CHILI_CMD_OFF, arg);
+		break;
+
+	case 'T':
+		cmd_setpoint_print(arg);
 		break;
 
 	case 'k':
