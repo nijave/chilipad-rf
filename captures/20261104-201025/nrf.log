@@ -1,0 +1,30 @@
++0.008717 [cfg] channel -> 50 (2450 MHz)
++8.011693 [z] ch=50 addr=55555555 len1=154 len2=154 chain=END_START x1
++8.015568 [tx] sent=1 segs=2 timeouts=0
++8.019430 [z] seg gap=0 us beyond preamble+address (TIMER1, +/-1 us)
++8.020128 [S] 77 sent
++16.010804 [z] ch=50 addr=55555555 len1=154 len2=154 chain=END_START x1
++16.014704 [tx] sent=1 segs=2 timeouts=0
++16.017741 [z] seg gap=0 us beyond preamble+address (TIMER1, +/-1 us)
++16.019470 [O] OFF @ 77 sent
++24.010927 [z] ch=50 addr=55555555 len1=154 len2=154 chain=END_START x1
++24.015200 [tx] sent=1 segs=2 timeouts=0
++24.017442 [z] seg gap=0 us beyond preamble+address (TIMER1, +/-1 us)
++24.017956 [S] 72 sent
++32.047978 [d] STATE=0x00000000
++32.049336 [d] SHORTS=0x00000000
++32.050174 [d] INTEN=0x0000001A
++32.050547 [d] RXADDR=0x00000001
++32.050897 [d] PCNF0=0x00000000
++32.051286 [d] PCNF1=0x01034040
++32.051660 [d] BASE0=0x713AD000
++32.052065 [d] PREFIX0=0x000000C0
++32.052479 [d] MODE=0x00000003
++32.052825 [d] FREQ=0x00000032
++32.053217 [d] PKTPTR=0x20001F5F
++32.053597 [d] CRCCNF=0x00000000
++32.054043 [d] HFCLKSTAT=0x00010001
++32.054474 [d] MODECNF0=0x00000200
++32.055391 [d] isr calls=0 addr=0 end=0 disabled=0 irq_enabled=2
++32.055946 [d] rate=Ble_1Mbit us_per_byte=8
++32.056746 [d] tx ready=3 end=6 timeouts=0 last_gap_us=0
