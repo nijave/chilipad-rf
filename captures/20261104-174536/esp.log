@@ -1,0 +1,9 @@
++0.017845 [cfg] ch=50 addr=custom SETUP_AW=0x02 RX_ADDR_P0=CAB08893 len=32 CRC=off ack=off
++0.021264 [cfg] channel -> 50 (2.450 GHz)
++0.120319 [cfg] ch=50 addr=custom SETUP_AW=0x02 RX_ADDR_P0=9388B0CA len=32 CRC=off ack=off
++0.127542 [addr] custom trigger 9388B0CA (4 bytes, register order: as-given; 'o' flips)
++0.215569 [cfg] ch=50 addr=custom SETUP_AW=0x02 RX_ADDR_P0=CAB08893 len=32 CRC=off ack=off
++0.220147 [addr] custom trigger register order -> reversed
++0.409702 [rx] SETUP_AW=0x02 RX_ADDR_P0=CAB08893 (on chip)
++0.411630 [cap] capture ON
++25.033505 [cap] capture OFF

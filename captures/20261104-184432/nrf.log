@@ -1,0 +1,55 @@
++0.007868 [cfg] channel -> 50 (2450 MHz)
++1.007028 [e] energy vs time on ch 50 for 8000 ms, threshold -62 dBm; press the remote...
++9.008745 [e] 4192540 samples, 10 stretches above threshold; E <start_us> <dur_us> <max_dBm>
++9.009164 E 3858054 109 -59
++9.009576 E 3858286 111 -51
++9.009961 E 4474922 2421 -45
++9.010320 E 4895992 81 -35
++9.010686 E 4896216 95 -31
++9.011025 E 6458002 27 -62
++9.011397 E 6458056 12 -62
++9.011722 E 6458088 2 -62
++9.012210 E 6458214 112 -50
++9.012554 E 7033508 83 -37
++9.012749 [e] done
++12.047339 === chilipad-sniffer (nRF52840 dongle, LT8920 2.4 GHz) ===
++12.047963 h            help + current config
++12.048862 p            start/stop capture (starts OFF at boot)
++12.049773 c<n>         channel 0..100 (default 50 = 2450 MHz)
++12.050623 l<n>         payload length 1..255 (default 64)
++12.051725 w<hex>       trigger address, 3..5 bytes on-air order (0B5C8E03)
++12.052702 'w' alone resets the address to the default
++12.053629 o            toggle byte order (as given <-> reversed)
++12.054615 r            toggle per-byte bit reversal (on by default)
++12.055746 s<sec>       energy scan ch 0..100 for <sec> s (default 2, max 60)
++12.056989 e<ms>        energy vs time on channel c for <ms> (default 2000, max 30000)
++12.058001 y<list>@<ms> hop channels, e.g. y10,30,50,70@200; 'y' stops
++12.059147 x<n>         replay the last captured frame n times (default 10)
++12.060284 t<hex>       load TX segment 1 (up to 255 bytes); same as t1<hex>
++12.061174 t1<hex>      load TX segment 1; 't1' alone clears it
++12.062088 t2<hex>      load TX segment 2; 't2' alone clears it
++12.062848 't' alone clears both segments
++12.063876 z<n>         send seg1 (+ seg2 back-to-back) n times, 1..1000
++12.064974 (default 1), each seg = preamble + 'w' addr + payload
++12.066185 m<rate>      data rate for RX and TX: m1 = 1 Mbit (default), m2 = 2 Mbit
++12.067140 (m250 = 250 kbit: not in this MDK, rejected)
++12.068383 j<ms>[b0|b1|c] carrier lead-in before each z burst, 0 = off (b1 default)
++12.069436 k<ms>        unmodulated carrier for 1..5000 ms on channel c;
++12.070620 k<ms>b0 / k<ms>b1 = constant '0' / '1' tone (DTX B0/B1)
++12.071572 d            radio register dump + ISR and TX counters
++12.072150 channel       : 50 (2450 MHz)
++12.072983 data rate     : Nrf_1Mbit (8 us/byte, RX and TX)
++12.073341 payload len   : 64
++12.074191 trigger addr  : 0B5C8E03 (4 bytes, on-air order)
++12.074632 byte order    : as given
++12.074972 bit reversal  : on
++12.075856 BALEN         : 3 (address = BALEN + 1 prefix byte)
++12.076174 BASE0         : 0x713AD000
++12.076825 PREFIX0       : 0xC0 (AP0, most significant address byte)
++12.077112 HFXO          : running
++12.077349 capture       : off
++12.077680 packets       : 0
++12.077894 ring drops    : 0
++12.078202 output drops  : 0 bytes
++12.078467 tx seg1       : empty
++12.078732 tx seg2       : empty
