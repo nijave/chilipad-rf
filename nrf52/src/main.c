@@ -110,6 +110,10 @@ static uint8_t  g_len       = DEFAULT_LEN;
 
 /* Trigger address, in on-air (RAW view) order, MSB first per byte. */
 static uint8_t  g_addr[DEFAULT_ADDR_LEN] = {0x0B, 0x5C, 0x8E, 0x03};
+/* Optional address for segment 2 of a 'z' burst ('v<hex>', same length as
+ * 'w'); 0 = segment 2 uses the 'w' address. */
+static uint8_t  g_addr2[5];
+static uint8_t  g_addr2_len;
 static uint8_t  g_addr_len  = DEFAULT_ADDR_LEN;
 static bool     g_order_rev;             /* 'o': reverse the byte sequence */
 static bool     g_bit_rev   = true;      /* 'r': bit-reverse every byte */
@@ -537,18 +541,19 @@ static void hfxo_start(void)
 
 /* Program BASE0/PREFIX0 from the user supplied on-air address.  See the long
  * comment at the top of the file for the reasoning behind the default. */
-static void radio_apply_address(void)
+/* BASE0/PREFIX0 values for an on-air address, honouring 'o' and 'r'. */
+static void addr_to_regs(const uint8_t *addr, uint8_t len, uint32_t *base_out,
+			 uint32_t *prefix_out)
 {
 	uint8_t bytes[5];
 	uint32_t base = 0u;
-	uint32_t prefix = 0u;
-	uint8_t balen = (uint8_t)(g_addr_len - 1u);
+	uint8_t balen = (uint8_t)(len - 1u);
 
-	for (uint8_t i = 0; i < g_addr_len; i++) {
-		bytes[i] = g_order_rev ? g_addr[g_addr_len - 1u - i] : g_addr[i];
+	for (uint8_t i = 0; i < len; i++) {
+		bytes[i] = g_order_rev ? addr[len - 1u - i] : addr[i];
 	}
 	if (g_bit_rev) {
-		for (uint8_t i = 0; i < g_addr_len; i++) {
+		for (uint8_t i = 0; i < len; i++) {
 			bytes[i] = bitrev8(bytes[i]);
 		}
 	}
@@ -560,7 +565,17 @@ static void radio_apply_address(void)
 	for (uint8_t i = 0; i < balen; i++) {
 		base |= (uint32_t)bytes[i] << (8u * (i + 4u - balen));
 	}
-	prefix = (uint32_t)bytes[g_addr_len - 1u];
+	*base_out = base;
+	*prefix_out = (uint32_t)bytes[len - 1u];
+}
+
+static void radio_apply_address(void)
+{
+	uint32_t base;
+	uint32_t prefix;
+	uint8_t balen = (uint8_t)(g_addr_len - 1u);
+
+	addr_to_regs(g_addr, g_addr_len, &base, &prefix);
 
 	nrf_radio_base0_set(NRF_RADIO, base);
 	nrf_radio_prefix0_set(NRF_RADIO, prefix);
@@ -1032,6 +1047,7 @@ static void print_help(void)
 	out_line(HAVE_RATE_250K ? "             m250 = 250 kbit (deprecated on nRF52840)"
 				: "             (m250 = 250 kbit: not in this MDK, rejected)");
 	out_line("j<ms>[b0|b1|c] carrier lead-in before each z burst, 0 = off (b1 default)");
+	out_line("v<hex>       address for segment 2 of z (same length as w); 'v' clears");
 	out_line("k<ms>        unmodulated carrier for 1..5000 ms on channel c;");
 	out_line("             k<ms>b0 / k<ms>b1 = constant '0' / '1' tone (DTX B0/B1)");
 	out_line("d            radio register dump + ISR and TX counters");
@@ -1312,6 +1328,7 @@ static void radio_tx_restore_rx(bool was_capturing)
 {
 	radio_apply_packet_format(g_len);
 	radio_apply_frequency();
+	radio_apply_address();   /* undo a segment-2 address ('v') */
 	nrf_radio_int_enable(NRF_RADIO, RADIO_INT_MASK);
 	radio_irq_unmask();
 
@@ -1522,6 +1539,16 @@ static uint8_t tx_one_burst(uint32_t pcnf1_1, uint32_t pcnf1_2, bool two,
 	if (!radio_spin_event(NRF_RADIO_EVENT_END,
 			      (uint32_t)len1 * us_per_byte + 1000u)) {
 		goto timeout;
+	}
+	if (two && g_addr2_len == g_addr_len) {
+		/* Segment 2's own address ('v').  On the hardware chain START has
+		 * already fired; the address field goes on air one preamble byte
+		 * after START, so this write lands first (checked with the ESP). */
+		uint32_t base2, prefix2;
+
+		addr_to_regs(g_addr2, g_addr2_len, &base2, &prefix2);
+		nrf_radio_base0_set(NRF_RADIO, base2);
+		nrf_radio_prefix0_set(NRF_RADIO, prefix2);
 	}
 	if (two && !hw_chain) {
 		NRF_RADIO->PCNF1 = pcnf1_2;
@@ -2226,6 +2253,31 @@ static void handle_command(const char *cmd)
 	case 'w':
 		cmd_set_addr(arg);
 		break;
+
+	case 'v': {
+		/* "v<hex>": address for segment 2 of 'z' (same length as 'w');
+		 * "v" alone clears it. */
+		uint8_t bytes[5];
+		uint8_t len;
+
+		if (*arg == '\0') {
+			g_addr2_len = 0;
+			out_line("[addr] segment 2 address cleared");
+			break;
+		}
+		if (!parse_hex_addr(arg, bytes, &len)) {
+			out_line("[addr] usage: v<hex> = 3..5 bytes, same length as w");
+			break;
+		}
+		memcpy(g_addr2, bytes, len);
+		g_addr2_len = len;
+		line_reset();
+		line_str("[addr] segment 2 address ");
+		line_hex(g_addr2, g_addr2_len);
+		line_str(g_addr2_len == g_addr_len ? "\r\n" : " (length differs from w: ignored)\r\n");
+		line_flush();
+		break;
+	}
 
 	case 'o':
 		g_order_rev = !g_order_rev;
