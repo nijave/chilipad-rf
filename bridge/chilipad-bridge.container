@@ -14,7 +14,7 @@
 Description=ChiliPad Cube MQTT bridge (container)
 
 [Container]
-Image=registry.example.com/chilipad-bridge:latest
+Image=registry.example.com/chilipad-rf:latest
 AutoUpdate=registry
 ContainerName=chilipad-bridge
 
@@ -22,11 +22,11 @@ ContainerName=chilipad-bridge
 EnvironmentFile=%h/.config/chilipad-bridge.env
 
 # The dongle. AddDevice does not expand globs: replace the path with the
-# exact name from `ls -l /dev/serial/by-id/` (usb-ZEPHYR_chilipad-sniffer_<serial>-if00).
+# exact name from `ls -l /dev/serial/by-id/` (usb-chilipad-rf_chilipad-sniffer_<serial>-if00).
 # The node appears in the container as /dev/chilipad. The bridge cannot
 # auto-detect it there (the container's /sys shows host names such as
 # ttyACM1, not /dev/chilipad), so CHILIPAD_PORT names it.
-AddDevice=/dev/serial/by-id/usb-ZEPHYR_chilipad-sniffer_REPLACE_ME-if00:/dev/chilipad
+AddDevice=/dev/serial/by-id/usb-chilipad-rf_chilipad-sniffer_REPLACE_ME-if00:/dev/chilipad
 Environment=CHILIPAD_PORT=/dev/chilipad
 
 # Keep the host user's supplementary groups (dialout) so the non-root

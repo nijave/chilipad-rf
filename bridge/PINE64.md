@@ -8,8 +8,10 @@ in the knowledge base (`personal/knowledge/systems/pine-a64-podman-host.md`).
 ## Deploy
 
 1. Create a service user, add it to `dialout`, `loginctl enable-linger` it.
-2. Plug in the nRF52840 dongle; find it under `/dev/serial/by-id/` and put
-   that path in `chilipad-bridge.container` (`AddDevice=`).
+2. Plug in the nRF52840 dongle; find it under `/dev/serial/by-id/`
+   (`usb-chilipad-rf_chilipad-sniffer_<serial>-if00`; the prefix is the USB
+   manufacturer string "chilipad-rf") and put that path in
+   `chilipad-bridge.container` (`AddDevice=`).
 3. Copy `chilipad-bridge.container` to
    `~/.config/containers/systemd/` and the env file (from
    `chilipad-bridge.env.example`) to `~/.config/chilipad-bridge.env`

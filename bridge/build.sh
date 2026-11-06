@@ -2,15 +2,15 @@
 # Build the chilipad-bridge image for linux/amd64 and linux/arm64 as one
 # manifest list, tag it :<tag> and :latest. Push only with --push.
 #
-#   ./build.sh                 # build, tag = YYYYMMDD-<script sha>
+#   ./build.sh                 # build, tag = short git sha (-dirty if needed)
 #   ./build.sh --tag 1.0.0     # build with an explicit tag
 #   ./build.sh --push          # build, then push :<tag> and :latest
 #
 # Needs podman, and qemu-user-static (binfmt) for the foreign architecture.
-# Push needs `podman login registry.example.com` first.
+# --push pushes to $CHILIPAD_IMAGE_REPO.
 set -euo pipefail
 
-REPO="${CHILIPAD_IMAGE_REPO:-registry.example.com/chilipad-bridge}"
+REPO="${CHILIPAD_IMAGE_REPO:-registry.example.com/chilipad-rf}"
 PLATFORMS="${CHILIPAD_PLATFORMS:-linux/amd64,linux/arm64}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 tag=""
@@ -30,7 +30,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$tag" ]]; then
-    tag="$(date +%Y%m%d)-$(sha256sum "$here/chilipad_bridge.py" | cut -c1-8)"
+    tag="$(git -C "$here" rev-parse --short HEAD)"
+    if [[ -n "$(git -C "$here" status --porcelain -- "$here")" ]]; then
+        tag="$tag-dirty"
+    fi
 fi
 if [[ "$tag" == latest ]]; then
     echo "use a version tag; :latest is added automatically" >&2
@@ -69,5 +72,5 @@ if [[ $push -eq 1 ]]; then
         podman manifest push --all "$ref" "docker://$ref"
     done
 else
-    echo ">> not pushed (use --push after: podman login ${REPO%%/*})"
+    echo ">> not pushed (rerun with --push)"
 fi

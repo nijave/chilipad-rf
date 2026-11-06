@@ -97,16 +97,18 @@ On the build machine (x86_64, with `qemu-user-static` for arm64):
 cd bridge
 ./build.sh                    # tag YYYYMMDD-<script sha> and latest, no push
 ./build.sh --tag 1.0.0        # explicit tag
-podman run --rm registry.example.com/chilipad-bridge:latest --help
-podman run --rm --platform linux/arm64 registry.example.com/chilipad-bridge:latest --help
+podman run --rm registry.example.com/chilipad-rf:latest --help
+podman run --rm --platform linux/arm64 registry.example.com/chilipad-rf:latest --help
 ```
 
 Push is manual:
 
 ```sh
-podman login registry.example.com
-./build.sh --push             # pushes :<tag> and :latest (both architectures)
+./build.sh --push             # pushes :<git sha> and :latest (both architectures)
 ```
+
+`AutoUpdate=registry` compares the digest behind the tag named in the
+quadlet, so the quadlet pins `:latest` and every push moves it.
 
 ### Install on the Pine
 
@@ -125,7 +127,7 @@ in your home, and auto-update runs from your own timer.
 
    ```sh
    ls -l /dev/serial/by-id/
-   # usb-ZEPHYR_chilipad-sniffer_<serial>-if00 -> ../../ttyACM0
+   # usb-chilipad-rf_chilipad-sniffer_<serial>-if00 -> ../../ttyACM0
    ```
 
 3. Install the unit and the env file:
@@ -143,18 +145,10 @@ in your home, and auto-update runs from your own timer.
    `CHILIPAD_MQTT_HOST`, `CHILIPAD_MQTT_USER` and `CHILIPAD_MQTT_PASSWORD`.
    Podman reads it with `--env-file`: `KEY=value`, no quotes, no `export`.
 
-4. If the registry requires a login to pull, log in with a persistent auth
-   file. A reboot clears the default file in `$XDG_RUNTIME_DIR`, and
-   then auto-update cannot pull:
+4. Start it:
 
    ```sh
-   podman login --authfile ~/.config/containers/auth.json registry.example.com
-   ```
-
-5. Start it:
-
-   ```sh
-   podman pull registry.example.com/chilipad-bridge:latest
+   podman pull registry.example.com/chilipad-rf:latest
    systemctl --user daemon-reload
    systemctl --user start chilipad-bridge
    systemctl --user status chilipad-bridge
@@ -217,8 +211,8 @@ unit, and rolls back if the new container does not start.
   ```sh
   systemctl --user stop chilipad-bridge
   podman run --rm --group-add keep-groups \
-      --device /dev/serial/by-id/usb-ZEPHYR_chilipad-sniffer_<serial>-if00:/dev/chilipad \
-      registry.example.com/chilipad-bridge:latest --port /dev/chilipad --once 72
+      --device /dev/serial/by-id/usb-chilipad-rf_chilipad-sniffer_<serial>-if00:/dev/chilipad \
+      registry.example.com/chilipad-rf:latest --port /dev/chilipad --once 72
   systemctl --user start chilipad-bridge
   ```
 
