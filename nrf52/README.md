@@ -29,6 +29,17 @@ The stock `nrf52840dongle/nrf52840` target already links the image at
 **0x1000** (`CONFIG_FLASH_LOAD_OFFSET`), which is what the Nordic open USB DFU
 bootloader expects. Use that target, not the `.../bare` variant.
 
+### Raytac MDBT50Q-CX dongle
+
+The Raytac MDBT50Q-CX-40 dongle ships the same Nordic open bootloader, so the
+DFU steps below work unchanged. Build it with
+`-b raytac_mdbt50q_cx_40_dongle/nrf52840`, **not** the PCA10059 target. The
+PCA10059 board config enables the DC/DC regulator and the Nordic dongle has
+the inductors for it; the Raytac module has none and runs in LDO mode. A
+PCA10059 image programs fine ("Device programmed") and then stays silent:
+no LED, no USB, no error. The dongle survives this; press RESET and the
+bootloader comes back. (From a product review, 2026-11; not yet tried here.)
+
 ## Flash over the Nordic open USB DFU bootloader
 
 ```sh
@@ -47,6 +58,7 @@ it with any serial terminal, 115200 baud (the CDC ACM baud rate is ignored).
 
 | Command | Action |
 |---------|--------|
+| `?` | probe: one line `chilipad-sniffer <build> ok` (see [UART command port](#uart-command-port-for-the-esp32-bridge)) |
 | `h` | help + current config (channel, data rate, length, address, byte order, bit reversal, BALEN, `BASE0`/`PREFIX0` as written, HFXO, capture state, packet/drop counts) |
 | `p` | start/stop capture. **Capture starts OFF at boot.** |
 | `c<n>` | channel 0..100 (default 50 = 2450 MHz) |
@@ -67,7 +79,7 @@ it with any serial terminal, 115200 baud (the CDC ACM baud rate is ignored).
 | `S<degF>[,<n>]` | set the Cube to `<degF>` (55..93): encode the press burst, send it `n` times (default 1, max 10, 100 ms apart), print `[S] <degF> sent`. See [Setting the Cube's temperature](#setting-the-cubes-temperature-s) |
 | `O<degF>[,<n>]` | power the Cube OFF (command byte `0x50`). `<degF>` is the Cube's current setpoint, 55..93 (the dongle does not know it). Prints `[O] OFF @ <degF> sent`. Power ON is any `S<degF>` |
 | `T<degF>` / `TO<degF>` | print `addr1 seg1 addr2 seg2` (hex) of the `S<degF>` / `O<degF>` burst, the same line `analysis/scripts/gen_burst2.py <degF>` (or `nrf52/tools/gen_burst2_cmd.py <degF> 50`) prints. Sends nothing |
-| `d` | radio register dump, ISR counters, `[d] rate=<mode> us_per_byte=<n>`, and TX totals `[d] tx ready=<n> end=<n> timeouts=<n> last_gap_us=<n>` |
+| `d` | radio register dump, ISR counters, `[d] rate=<mode> us_per_byte=<n>`, and TX totals `[d] tx ready=<n> end=<n> timeouts=<n> last_gap_us=<n>`, UART port counters `[d] uart drops=<n> rx_lost=<n> ready=<0\|1>` |
 
 Output is one line per packet:
 
@@ -85,6 +97,72 @@ If the packet ring in the firmware fills up faster than the USB link drains it,
 `[drop n]` lines are printed (rate limited) and the totals appear in `h`.
 Output never blocks: when no host is reading, lines are dropped and counted in
 `output drops`.
+
+## UART command port (for the ESP32 bridge)
+
+The firmware also accepts commands on the hardware UART (`uart0`). An ESP32 can
+drive the dongle through this port instead of USB. The commands and the reply
+lines are the same as on USB CDC ACM. USB keeps working at the same time.
+
+| Setting | Value |
+|---------|-------|
+| Pads | TX = **P0.20**, RX = **P0.24** (pads on the PCA10059 edge) |
+| Levels | 3.3 V logic (nRF52840 VDD). Do not connect 5 V signals |
+| Format | 115200 baud, 8N1, no flow control |
+| Line end | `\n` or `\r\n` on input; every output line ends with `\r\n` |
+
+P0.17 and P0.22 (RTS/CTS in the board's default `uart0` pinctrl) are not
+used. `app.overlay` defines its own pinctrl with only TX and RX. RX has the
+internal pull-up on, so an unconnected RX stays idle.
+
+Wiring:
+
+```
+dongle P0.20 (TX)  ->  ESP32 RX (UART2 RX, for example GPIO16)
+dongle P0.24 (RX)  <-  ESP32 TX (for example GPIO17)
+dongle GND         --  ESP32 GND
+ESP32 5 V          ->  dongle VBUS pad (powers the dongle when USB is unplugged)
+```
+
+Do not feed 5 V to VBUS while the dongle is also plugged into a USB host.
+
+Rules:
+
+* Each port has its own line buffer. Input on USB and UART at the same time
+  does not mix.
+* Reply lines of a command go only to the port that sent the command.
+  This includes long commands such as `s` (`[scan]` lines) and `e` (`E` lines),
+  because they print while the command runs.
+* Lines from the main loop go to **both** ports: `P ...` capture lines and
+  `[drop n]`. With the UART idle, USB gets the same output as before.
+  The boot line `[ok] chilipad-sniffer ready ...` also goes to both.
+* An empty line is ignored. Send `\n` first after a reset to clear any
+  noise bytes that the ESP32 boot put on the line.
+* The UART output ring holds 4 kB. 115200 baud moves about 11.5 bytes per ms,
+  so one 255-byte capture line (about 1.1 kB) takes about 100 ms. When the ring
+  is full, the firmware drops the whole line and counts it. It never waits, so a
+  slow UART does not stop USB output or the radio. `d` prints
+  `[d] uart drops=<bytes> rx_lost=<bytes> ready=<0|1>`. `rx_lost` counts input
+  bytes lost because the 1 kB UART input ring was full.
+* RX and TX run from the `uart0` interrupt (EasyDMA, `CONFIG_UART_0_INTERRUPT_DRIVEN`).
+  The main loop does not poll this UART, so it does not lose input bytes
+  between its 1 ms passes. The RADIO interrupt has a higher priority.
+* `x`, `z`, `S` and `O` lock interrupts for up to about 2 ms per burst. Do not
+  send UART input while one of these commands runs. Wait for its last reply
+  line (for example `[S] 74 sent`).
+
+### Probe (`?`)
+
+`?` prints one line:
+
+```
+chilipad-sniffer <build> ok
+```
+
+`<build>` is the UTC time of the CMake configure step, for example
+`20261104-2010Z` (`CMakeLists.txt`). The build host has no `.git`, so there is
+no git hash. The ESP32 can send `\n?\n` and wait for a line that starts with
+`chilipad-sniffer ` and ends with ` ok`.
 
 ## Data rate (`m`)
 
