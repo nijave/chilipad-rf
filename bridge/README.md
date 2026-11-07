@@ -37,9 +37,16 @@ Options (environment variable in brackets): `--port` (`CHILIPAD_PORT`),
 `--mqtt-host` (`CHILIPAD_MQTT_HOST`), `--mqtt-port` (`CHILIPAD_MQTT_PORT`,
 1883), `--mqtt-user` (`CHILIPAD_MQTT_USER`), `--mqtt-password`
 (`CHILIPAD_MQTT_PASSWORD`), `--name` ("ChiliPad Cube"), `--unique-id`
-(`chilipad_cube`), `--units F`, `--min 55`, `--max 93`, `--no-sniff`,
+(`chilipad_cube`), `--units F`, `--min 55`, `--max 93`,
+`--default-setpoint` (`CHILIPAD_DEFAULT_SETPOINT`, 72), `--no-sniff`,
 `--log-level`. Give the password through the environment: a command-line
 value is visible in `ps`. The bridge never logs it.
+
+The Cube sends no feedback, so the bridge only knows a setpoint it sent,
+sniffed from the remote, or restored from the broker. Until one exists it
+shows the default setpoint in mode off, because Home Assistant hides the
+temperature control while the target is unknown, and a mode change with no
+known setpoint uses the default.
 
 The user that runs the bridge must be able to open the port (group
 `dialout` on most distributions).

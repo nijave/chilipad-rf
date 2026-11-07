@@ -668,12 +668,28 @@ class Bridge:
             self._transmit("S", job[1])
         elif job[0] == "mode":
             if sp is None:
-                log.error(
-                    "mode %s: no setpoint known yet; set a temperature first", job[1]
-                )
-                self._publish_state()
-                return
+                # Nothing sent, sniffed or restored yet. Home Assistant hides
+                # the temperature control while the target is unknown, so a
+                # mode change must work without one.
+                sp = self.args.default_setpoint
+                log.info("mode %s: no setpoint known yet; using %d degF", job[1], sp)
             self._transmit("O" if job[1] == "off" else "S", sp)
+        elif job[0] == "seed":
+            # Runs a few seconds after the MQTT connect, once the retained
+            # state (if any) has arrived. Without a known setpoint the Home
+            # Assistant dial shows "Unknown" and offers no way to set one.
+            with self.state_lock:
+                if self.state is not None:
+                    return
+                self.state = self.args.default_setpoint
+                self.mode = self.mode or "off"
+                log.info(
+                    "no state on the broker; showing %s %d degF until a press is "
+                    "sent or sniffed",
+                    self.mode,
+                    self.state,
+                )
+            self._publish_state()
 
     def _worker(self) -> None:
         while not self.stop_evt.is_set():
@@ -702,6 +718,8 @@ class Bridge:
                     self._handle(j)
             elif job[0] == "setup":
                 self._setup_dongle()
+            elif job[0] == "seed":
+                self._handle(job)
             elif job[0] == "stop":
                 return
 
@@ -789,6 +807,7 @@ class Bridge:
         self._publish_discovery()
         self._publish_availability()
         self._publish_state()
+        threading.Timer(3.0, self.jobs.put, args=[("seed",)]).start()
 
     def _on_disconnect(self, client, userdata, flags, reason_code, properties=None):
         self.mqtt_up.clear()
@@ -1047,6 +1066,14 @@ def parse_args(argv=None):
     p.add_argument("--min", type=int, default=HW_MIN)
     p.add_argument("--max", type=int, default=HW_MAX)
     p.add_argument(
+        "--default-setpoint",
+        type=int,
+        metavar="DEGF",
+        default=int(env("DEFAULT_SETPOINT", "72")),
+        help="setpoint shown and used for mode changes while none is known "
+        "(default: 72)",
+    )
+    p.add_argument(
         "--no-sniff",
         dest="sniff",
         action="store_false",
@@ -1079,6 +1106,8 @@ def parse_args(argv=None):
     a = p.parse_args(argv)
     if not HW_MIN <= a.min <= a.max <= HW_MAX:
         p.error(f"--min/--max must satisfy {HW_MIN} <= min <= max <= {HW_MAX}")
+    if not a.min <= a.default_setpoint <= a.max:
+        p.error(f"--default-setpoint must be within {a.min}..{a.max}")
     if a.port and is_esp_port(a.port):
         p.error(
             f"{a.port} looks like the ESP8266 sniffer; this bridge uses the nRF52 dongle"
