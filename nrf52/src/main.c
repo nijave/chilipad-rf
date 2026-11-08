@@ -84,6 +84,18 @@
 #define TX_CHUNK_BYTES    64
 #define LINE_MAX          1400          /* one printed line, no allocation */
 
+/* Second command port on the hardware UART (uart0: TX P0.20, RX P0.24,
+ * 115200 8N1, no flow control).  115200 baud moves ~11.5 bytes/ms, so the TX
+ * ring holds ~0.35 s of output; anything beyond that is dropped and counted. */
+#define UART_TX_RING_BYTES 4096
+#define UART_RX_RING_BYTES 1024
+#define UART_TX_CHUNK      32           /* = CONFIG_UART_0_NRF_TX_BUFFER_SIZE */
+
+/* Build id for the '?' probe; CMakeLists.txt sets it to the UTC build time. */
+#ifndef CHILI_BUILD_ID
+#define CHILI_BUILD_ID "unknown"
+#endif
+
 #define DEFAULT_CHANNEL   50            /* 2450 MHz */
 #define DEFAULT_LEN       64
 #define DEFAULT_ADDR_LEN  4
@@ -208,6 +220,32 @@ static bool   g_console_ok;
 
 static const struct device *const console_dev =
 	DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+
+/* Command ports.  Lines printed while a command runs go only to the port that
+ * sent it; lines printed from the main loop (P captures, [drop n]) go to both.
+ * With the UART idle, USB therefore sees exactly what it saw before. */
+enum cmd_port_id {
+	PORT_USB = 0,
+	PORT_UART,
+	PORT_COUNT,
+};
+#define OUT_USB  BIT(PORT_USB)
+#define OUT_UART BIT(PORT_UART)
+#define OUT_ALL  (OUT_USB | OUT_UART)
+static uint8_t g_out_mask = OUT_ALL;
+
+/* Hardware UART port: the main thread fills g_uart_tx_rb, the UART interrupt
+ * drains it with uart_fifo_fill() (EasyDMA, never blocks the main loop) and
+ * fills g_uart_rx_rb.  One producer and one consumer per ring, so the
+ * ring_buf calls need no lock. */
+static const struct device *const uart_cmd_dev = DEVICE_DT_GET(DT_NODELABEL(uart0));
+static uint8_t         g_uart_tx_area[UART_TX_RING_BYTES];
+static struct ring_buf g_uart_tx_rb;
+static uint8_t         g_uart_rx_area[UART_RX_RING_BYTES];
+static struct ring_buf g_uart_rx_rb;
+static uint32_t        g_uart_drops;     /* output bytes dropped (TX ring full) */
+static volatile uint32_t g_uart_rx_lost; /* input bytes dropped (RX ring full) */
+static bool            g_uart_ok;
 
 /* Energy scan results ('s'). */
 static uint16_t g_scan_count[CHANNEL_MAX + 1];
@@ -451,17 +489,29 @@ static void line_hex(const uint8_t *data, uint16_t len)
 	}
 }
 
-/* Push the assembled line into the software output ring.  A line that does not
- * fit is dropped whole (a half line would confuse the laptop GUI) and counted,
- * never waited for. */
+/* Push the assembled line into the output ring of every port in g_out_mask.  A
+ * line that does not fit is dropped whole (a half line would confuse the
+ * laptop GUI) and counted per port, never waited for, so a slow UART cannot
+ * hold up USB output or the radio. */
 static void line_flush(void)
 {
-	if (ring_buf_space_get(&g_tx_rb) < (uint32_t)g_line_len) {
-		g_tx_drops += (uint32_t)g_line_len;
-		g_line_len = 0;
-		return;
+	uint32_t len = (uint32_t)g_line_len;
+
+	if ((g_out_mask & OUT_USB) != 0u) {
+		if (ring_buf_space_get(&g_tx_rb) < len) {
+			g_tx_drops += len;
+		} else {
+			(void)ring_buf_put(&g_tx_rb, (const uint8_t *)g_line, len);
+		}
 	}
-	(void)ring_buf_put(&g_tx_rb, (const uint8_t *)g_line, (uint32_t)g_line_len);
+	if ((g_out_mask & OUT_UART) != 0u && g_uart_ok) {
+		if (ring_buf_space_get(&g_uart_tx_rb) < len) {
+			g_uart_drops += len;
+		} else {
+			(void)ring_buf_put(&g_uart_tx_rb, (const uint8_t *)g_line, len);
+			uart_irq_tx_enable(uart_cmd_dev);
+		}
+	}
 	g_line_len = 0;
 }
 
@@ -500,6 +550,46 @@ static void tx_pump(void)
 			uart_poll_out(console_dev, chunk[i]);
 		}
 		budget -= have;
+	}
+}
+
+/* uart0 interrupt.  RX: the UARTE receives one byte per EasyDMA transfer and
+ * fifo_read() restarts it, so bytes are taken here at interrupt time instead of
+ * by the 1 ms main loop (at 115200 baud ~11 bytes arrive per ms).  TX: when the
+ * previous DMA chunk has gone out, start the next one from g_uart_tx_rb, or
+ * switch the TX interrupt off when the ring is empty (line_flush() switches it
+ * on again).  The RADIO IRQ has priority 0 and preempts this handler. */
+static void uart_cmd_isr(const struct device *dev, void *user_data)
+{
+	ARG_UNUSED(user_data);
+
+	if (!uart_irq_update(dev)) {
+		return;
+	}
+
+	if (uart_irq_rx_ready(dev)) {
+		uint8_t b;
+
+		while (uart_fifo_read(dev, &b, 1) == 1) {
+			if (ring_buf_put(&g_uart_rx_rb, &b, 1) != 1u) {
+				g_uart_rx_lost++;
+			}
+		}
+	}
+
+	if (uart_irq_tx_ready(dev)) {
+		uint8_t *data;
+		uint32_t n = ring_buf_get_claim(&g_uart_tx_rb, &data, UART_TX_CHUNK);
+
+		if (n == 0u) {
+			(void)ring_buf_get_finish(&g_uart_tx_rb, 0);
+			uart_irq_tx_disable(dev);
+		} else {
+			int sent = uart_fifo_fill(dev, data, (int)n);
+
+			(void)ring_buf_get_finish(&g_uart_tx_rb,
+						  sent > 0 ? (uint32_t)sent : 0u);
+		}
 	}
 }
 
@@ -1029,6 +1119,7 @@ static void print_help(void)
 	out_line("");
 	out_line("=== chilipad-sniffer (nRF52840 dongle, LT8920 2.4 GHz) ===");
 	out_line("h            help + current config");
+	out_line("?            probe: prints 'chilipad-sniffer <build> ok'");
 	out_line("p            start/stop capture (starts OFF at boot)");
 	out_line("c<n>         channel 0..100 (default 50 = 2450 MHz)");
 	out_line("l<n>         payload length 1..255 (default 64)");
@@ -1054,7 +1145,7 @@ static void print_help(void)
 	out_line("v<hex>       address for segment 2 of z (same length as w); 'v' clears");
 	out_line("k<ms>        unmodulated carrier for 1..5000 ms on channel c;");
 	out_line("             k<ms>b0 / k<ms>b1 = constant '0' / '1' tone (DTX B0/B1)");
-	out_line("d            radio register dump + ISR and TX counters");
+	out_line("d            radio register dump + ISR, TX and UART counters");
 	out_line("S<F>[,<n>]   set the Cube to <F> degF (55..93): encode + send the burst");
 	out_line("             n times (1..10, default 1, 100 ms apart); use c50 mb1");
 	out_line("O<F>[,<n>]   power the Cube OFF; <F> = its current setpoint (55..93)");
@@ -2363,11 +2454,23 @@ static void handle_command(const char *cmd)
 		}
 		line_str("\r\n");
 		line_flush();
+		line_reset();
+		line_str("[d] uart drops=");
+		line_u32(g_uart_drops);
+		line_str(" rx_lost=");
+		line_u32(g_uart_rx_lost);
+		line_str(g_uart_ok ? " ready=1\r\n" : " ready=0\r\n");
+		line_flush();
 		break;
 	}
 
 	case 'h':
 		print_help();
+		break;
+
+	case '?':
+		/* Probe for the ESP32 bridge: one fixed-format line. */
+		out_line("chilipad-sniffer " CHILI_BUILD_ID " ok");
 		break;
 
 	case 'p':
@@ -2551,31 +2654,76 @@ static void handle_command(const char *cmd)
  * data while it is full, so a long line is not lost between 1 ms polls. */
 #define CMD_MAX 600
 
+/* One line buffer per port, so input arriving on USB and UART at the same
+ * time is never mixed into one command. */
+struct cmd_line {
+	char     buf[CMD_MAX + 1];
+	uint16_t len;
+	bool     overflow;
+};
+static struct cmd_line g_cmd_line[PORT_COUNT];
+
+/* Feed one input byte from `port`.  CR or LF ends a line; an empty line (a
+ * bare newline, or the LF of a CRLF pair) is ignored.  Everything the command
+ * prints goes only to `port`. */
+static void cmd_feed(uint8_t port, unsigned char c)
+{
+	struct cmd_line *cl = &g_cmd_line[port];
+
+	if (c == (unsigned char)'\r' || c == (unsigned char)'\n') {
+		g_out_mask = (uint8_t)BIT(port);
+		if (cl->overflow) {
+			out_line("[?] command line too long, ignored");
+		} else if (cl->len > 0u) {
+			cl->buf[cl->len] = '\0';
+			handle_command(cl->buf);
+		}
+		g_out_mask = OUT_ALL;
+		cl->len = 0;
+		cl->overflow = false;
+		return;
+	}
+	if (cl->len < CMD_MAX) {
+		cl->buf[cl->len++] = (char)c;
+	} else {
+		cl->overflow = true;
+	}
+}
+
 static void poll_console_input(void)
 {
-	static char     buf[CMD_MAX + 1];
-	static uint16_t buf_len;
-	static bool     overflow;
-	unsigned char   c;
+	unsigned char c;
 
 	while (uart_poll_in(console_dev, &c) == 0) {
-		if (c == (unsigned char)'\r' || c == (unsigned char)'\n') {
-			if (overflow) {
-				out_line("[?] command line too long, ignored");
-			} else if (buf_len > 0u) {
-				buf[buf_len] = '\0';
-				handle_command(buf);
-			}
-			buf_len = 0;
-			overflow = false;
-			continue;
-		}
-		if (buf_len < CMD_MAX) {
-			buf[buf_len++] = (char)c;
-		} else {
-			overflow = true;
+		cmd_feed(PORT_USB, c);
+	}
+}
+
+static void poll_uart_input(void)
+{
+	uint8_t  chunk[32];
+	uint32_t n;
+
+	while ((n = ring_buf_get(&g_uart_rx_rb, chunk, sizeof(chunk))) > 0u) {
+		for (uint32_t i = 0; i < n; i++) {
+			cmd_feed(PORT_UART, chunk[i]);
 		}
 	}
+}
+
+static void uart_cmd_init(void)
+{
+	ring_buf_init(&g_uart_tx_rb, (uint32_t)sizeof(g_uart_tx_area), g_uart_tx_area);
+	ring_buf_init(&g_uart_rx_rb, (uint32_t)sizeof(g_uart_rx_area), g_uart_rx_area);
+
+	if (!device_is_ready(uart_cmd_dev)) {
+		return;
+	}
+	if (uart_irq_callback_set(uart_cmd_dev, uart_cmd_isr) != 0) {
+		return;
+	}
+	uart_irq_rx_enable(uart_cmd_dev);
+	g_uart_ok = true;
 }
 
 int main(void)
@@ -2592,10 +2740,12 @@ int main(void)
 	 * in the OFF state ('p' enables it). */
 	radio_configure();
 
+	uart_cmd_init();
+
 	g_console_ok = device_is_ready(console_dev);
-	if (g_console_ok) {
-		out_line("[ok] chilipad-sniffer ready, capture OFF - send 'h' for help");
-	}
+	g_out_mask = (uint8_t)((g_console_ok ? OUT_USB : 0u) | OUT_UART);
+	out_line("[ok] chilipad-sniffer ready, capture OFF - send 'h' for help");
+	g_out_mask = OUT_ALL;
 
 	while (true) {
 		if (!g_console_ok) {
@@ -2607,6 +2757,9 @@ int main(void)
 		tx_pump();
 		if (g_console_ok) {
 			poll_console_input();
+		}
+		if (g_uart_ok) {
+			poll_uart_input();
 		}
 
 		int64_t now_ms = k_uptime_get();
