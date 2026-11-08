@@ -218,3 +218,15 @@ at about 35 s** for the rest of the capture. Labelled bursts:
 * Remote behaviour (20261107-201142): UP/DOWN presses while the Cube was off
   sent no RF. The power press sent a normal set packet (`07 A5 44 48 …`,
   72 °F), and OFF sent `07 A5 50 48 …`.
+* **The remote does not know the Cube's state.** The bridge's dongle logged
+  every press of 20261107-203533 (set 72, 73, 72 at 12, 22 and 32 s), then
+  nothing while the Cube stayed unplugged until 01:37:33 UTC, about 30 s
+  after the capture, when the remote sent set 71 and set 72. The Cube was
+  still unplugged at that time. The remote keeps its own on/off state: after
+  OFF it ignores UP/DOWN until the power button, whatever the Cube does.
+  The quiet stretch after the unplug means no setpoint press reached the
+  remote's transmitter (a press that only wakes the display, for example).
+* Kryo Inc. (grantee `2AUPC`) holds one FCC ID, `2AUPC-CP-CUBE`, for the
+  remote (Intertek report 190531096GZU-001, Part 15.249: one channel at
+  2450 MHz, GFSK 1 Mbit/s, 20 dB bandwidth 1152.5 kHz, 3 V battery). The Cube
+  has no transmitter certification, which fits a receive-only Cube.
