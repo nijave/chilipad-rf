@@ -241,7 +241,17 @@ unit, and rolls back if the new container does not start.
 
 * The Cube sends no feedback. The state is the last value the bridge sent or
   sniffed. If a burst does not reach the Cube, Home Assistant still shows the
-  new value. Changes made on the Cube's own buttons are not seen.
+  new value. Changes made on the Cube's own buttons are not seen. HackRF
+  captures and the FCC filings confirm that the Cube only receives
+  (`../analysis/poll-reply.md` section 7).
+* After a power cut the Cube starts in the off state, but the bridge restores
+  its last retained state. Home Assistant shows the old state until the next
+  command or sniffed press. A set command (temperature or mode `auto`) turns
+  the Cube on again. An energy-monitoring outlet gives Home Assistant the real
+  on/off state.
+* The remote keeps its own on/off state. After you press OFF on the remote,
+  it ignores UP/DOWN until its power button, even if Home Assistant turned
+  the Cube on in the meantime.
 * A remote press is only seen when the dongle decodes it cleanly. The bridge can
   miss a weak press (remote far from the dongle).
 * The dongle must be within a few metres of the Cube.

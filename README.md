@@ -6,6 +6,11 @@ nRF52840 dongle. The remote is an LT8920 at 62.5 kbit/s on
 (cmd+SP-0x80)` with CRC-16/KERMIT, `cmd` 0x44 = set/on, 0x50 = off. Details
 in `analysis/burst-structure.md`.
 
+Status (2026-11-07): HackRF captures show the Cube never transmits; the
+other 2.4 GHz traffic near it (families A and B) belongs to another device.
+The remote keeps its own on/off state. See `analysis/poll-reply.md`
+sections 6–7.
+
 - `nrf52/` — Zephyr firmware for the PCA10059 dongle: sniffer, replay, and
   the `S<degF>` / `O<degF>` controller commands (`nrf52/README.md`).
 - `bridge/` — serial → MQTT bridge exposing the Cube as a Home Assistant
