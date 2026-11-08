@@ -1,0 +1,10 @@
+start_epoch_ns 1794100302799857162
+freq_hz 2446000000
+rate_sps 20000000
+lna_gain_db 32
+vga_gain_db 20
+amp 0
+samples 3600000000
+note exp b: off baseline, on press ~15s, up ~25, down ~35, awake, OFF ~110, unplug ~120
+end_epoch_ns 1794100482968389202
+exit_code 0

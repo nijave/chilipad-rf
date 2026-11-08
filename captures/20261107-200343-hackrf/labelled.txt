@@ -1,0 +1,11 @@
+2450.000MHz t=1.967887s dur=143us pwr=-83.0dBFS cfo=+7639Hz(+3.12ppm) dev=164271Hz label=famB off=18 pol=+1 err=0 hdr=- gap=42433
+2450.000MHz t=2.317277s dur=131us pwr=-80.7dBFS cfo=+5307Hz(+2.17ppm) dev=172739Hz label=famB off=6 pol=+1 err=0 hdr=- gap=122
+2450.000MHz t=2.341640s dur=2411us pwr=-81.8dBFS cfo=+3566Hz(+1.46ppm) dev=254286Hz label=famB off=18 pol=+1 err=3 hdr=- gap=6457
+2450.000MHz t=2.344777s dur=131us pwr=-80.7dBFS cfo=+709Hz(+0.29ppm) dev=172169Hz label=famB off=6 pol=+1 err=0 hdr=- gap=122
+2450.000MHz t=3.895409s dur=143us pwr=-84.3dBFS cfo=+6500Hz(+2.65ppm) dev=162078Hz label=famB off=19 pol=+1 err=1 hdr=- gap=24307
+2450.000MHz t=4.079162s dur=143us pwr=-83.5dBFS cfo=-3067Hz(-1.25ppm) dev=169536Hz label=famB off=18 pol=+1 err=0 hdr=- gap=3331
+2450.000MHz t=4.079799s dur=131us pwr=-80.6dBFS cfo=+4168Hz(+1.70ppm) dev=174853Hz label=famB off=6 pol=+1 err=0 hdr=- gap=122
+2450.000MHz t=4.203552s dur=131us pwr=-80.4dBFS cfo=+2815Hz(+1.15ppm) dev=172553Hz label=famB off=6 pol=+1 err=0 hdr=- gap=123
+2450.000MHz t=4.503552s dur=131us pwr=-80.6dBFS cfo=+3719Hz(+1.52ppm) dev=169956Hz label=famB off=7 pol=+1 err=0 hdr=- gap=122
+2450.000MHz t=6.896231s dur=123us pwr=-60.0dBFS cfo=-2877Hz(-1.17ppm) dev=211895Hz label=famA off=39 pol=+1 err=0 hdr=BAC1BEC54D67F8 gap=13220
+2450.000MHz t=6.896462s dur=122us pwr=-71.4dBFS cfo=-3660Hz(-1.49ppm) dev=218901Hz label=famA off=38 pol=+1 err=0 hdr=BEC1A7A94D67F8 gap=231

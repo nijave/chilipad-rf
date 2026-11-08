@@ -1,0 +1,10 @@
+start_epoch_ns 1794099823083874903
+freq_hz 2446000000
+rate_sps 20000000
+lna_gain_db 24
+vga_gain_db 20
+amp 0
+samples 200000000
+note gain check near cube, no input
+end_epoch_ns 1794099833115204649
+exit_code 0

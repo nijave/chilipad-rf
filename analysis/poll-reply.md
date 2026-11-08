@@ -174,12 +174,47 @@ the 256 bursts are weak unknowns (Wi-Fi/BLE). Output:
 * Both packets decode with 0 errors on the sync, in the same polarity
   (higher frequency = `1`). T and W match the table in section 1.
 * The packets start 229 µs apart (231 µs in the dongle data).
-* **The two carrier offsets differ by 40.6 kHz (16.6 ppm).** This supports the
-  two-transmitter reading with a measurement that does not depend on distance.
-  A remote setpoint burst in the same capture will show which offset is the
-  remote's (`hackrf-plan.md`, experiment b).
+* The two carrier offsets differ by 40.6 kHz here. At −88 dBFS this
+  estimate is noisy; the clean capture in section 7 puts both packets within
+  a few kHz of each other.
 * Packet 2 is again the stronger one (6 dB), as in every earlier capture.
 * The tails read `6778` and `67B9` from clean IQ, which differ from the
   dongle's `62B8` and the ESP's `6578`. One capture is not enough to fix the
   tail value.
 * Deviation is about ±220 kHz, so the synthetic tests' 250 kHz is close.
+
+## 7. Family A is not the ChiliPad (20261107-203533)
+
+Experiment b from `hackrf-plan.md`, 90 s, LNA 24 / VGA 20, laptop about 2 m
+from the Cube, an on-screen timer (`scripts/capture_timer.py`) for the
+steps. Power press at about 10 s, UP at 20 s, DOWN at 30 s, **Cube unplugged
+at about 35 s** for the rest of the capture. Labelled bursts:
+`captures/20261107-203533-hackrf/labelled.txt`.
+
+| source | events | CFO |
+|---|---|---|
+| remote setpoint bursts | 3 (10.7, 20.8, 30.9 s) | −31.9, −30.7, −29.8 kHz |
+| family A packet 1 (`BA`/`BC`) | 8 | −3.4 … +4.1 kHz |
+| family A packet 2 (`BE`/`B8`) | 9 | −9.5 … 0 kHz |
+
+* **Family A pairs continue after the Cube loses power** (51, 56, 58, 70,
+  70.5, 78.8 and 82 s), with both packets.
+* Both family A packets sit about 25 kHz away from the remote's offset. The
+  scatter within each group is under 10 kHz, so neither packet comes from
+  the remote.
+* Thus family A is a **third device** near the Cube (the last row of the
+  table in section 5). The b1 = 1 after presses in earlier runs was chance.
+* The earlier capture 20261107-201142, with the laptop next to the Cube,
+  clipped the ADC on packet 1 (4 % of its samples at full scale), so that
+  capture gives no CFO for packet 1. Packet 1's strength there says the
+  third device sits close to the Cube.
+* Family B behaves the same way: frames continue at 68–77 s with the Cube
+  unplugged, at −4.3 … +5.0 kHz (see `unknown-frames.md`).
+* Nothing at 2450 MHz answers a remote press: within 200 ms after each
+  press only family B frames and Wi-Fi/BLE noise appear, none at the
+  remote's offset or at a new, repeating offset. This matches the bridge's
+  model that the Cube never transmits. Other channels remain open
+  (`hackrf-plan.md`, experiment c).
+* Remote behaviour (20261107-201142): UP/DOWN presses while the Cube was off
+  sent no RF. The power press sent a normal set packet (`07 A5 44 48 …`,
+  72 °F), and OFF sent `07 A5 50 48 …`.

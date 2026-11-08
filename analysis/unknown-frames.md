@@ -8,6 +8,12 @@ so the RAW hex starts at bit 24.
 
 ## Short version
 
+* **Update 2026-11-07 (HackRF):** families A and B both continue with the Cube
+  unplugged, at carrier offsets about 25–30 kHz away from the remote's. Neither
+  family comes from the ChiliPad; see `poll-reply.md` section 7. Family B
+  payload bits come in runs of three (`000`/`111`), so its data rate is
+  probably 333 kbit/s.
+
 * Families A and B are **two different things**. They share no structure at any
   bit offset, inverted or reversed.
 * Both have a clean alternating preamble of at least 24 bits at **1 µs per bit**

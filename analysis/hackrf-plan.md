@@ -13,6 +13,17 @@ Open questions this plan targets:
 * c. Whether anything uses a channel other than 2450 MHz.
 * d. Whether the dongle's burst matches the remote's on air.
 
+Status 2026-11-07: experiment b showed that families A and B both continue
+with the Cube unplugged, at carrier offsets far from the remote's, so neither
+comes from the ChiliPad (`poll-reply.md` section 7). Questions a and b no
+longer concern the Cube; c and d remain.
+
+On-screen steps: `capture_timer.py` shows the elapsed capture time and the
+current step full screen on the capture laptop. Start it before the capture
+with `--meta-dir ../../captures` and it counts from the capture's
+`start_epoch_ns`. Over SSH, set `DISPLAY=:0` and `XAUTHORITY` to the X
+server's `-auth` file (`ps -o args= -C Xorg` shows it).
+
 ## Setup
 
 ```sh
