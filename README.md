@@ -12,6 +12,8 @@ in `analysis/burst-structure.md`.
   climate entity (`bridge/README.md`).
 - `tools/capgui.py` — capture GUI with a visible clock for filmed runs.
 - `analysis/` — decoder, encoder, burst generators and write-ups.
+  `analysis/hackrf-plan.md` covers HackRF IQ captures and the offline
+  demodulator `analysis/scripts/iq_demod.py`.
 - `captures/` — raw capture logs.
 - The ESP8266 + nRF24L01+ sketch below is the original sniffer; it still
   serves as a second receiver for checking the dongle's transmissions.
