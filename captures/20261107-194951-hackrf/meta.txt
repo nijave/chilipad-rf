@@ -1,0 +1,10 @@
+start_epoch_ns 1794098991741914052
+freq_hz 2446000000
+rate_sps 20000000
+lna_gain_db 24
+vga_gain_db 20
+amp 0
+samples 60000000
+note smoke test, away from the cube
+end_epoch_ns 1794098994792794813
+exit_code 0

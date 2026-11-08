@@ -157,3 +157,29 @@ temperature, the data does not travel in this exchange.
 3. ESP on `632F4B` with the RSSI of packet 2 alone (`AAAAAA` + `B8C1`/`BEC1` trigger), and
    with setpoint and power changes (Cube off, F/C toggle), to see whether T/b1 or the tail
    ever change.
+
+## 6. First HackRF capture (20261107-194951)
+
+A 3 s smoke test from a laptop (HackRF Pro, 2446 MHz centre, 20 MS/s, LNA
+24 / VGA 20, amp off). The laptop sat away from the Cube, and nobody touched
+the remote. `iq_demod.py` found one family A pair at t = 2.345 s; the rest of
+the 256 bursts are weak unknowns (Wi-Fi/BLE). Output:
+`captures/20261107-194951-hackrf/demod.txt`.
+
+| packet | T C1 W 4D tail | power | CFO | deviation |
+|---|---|---|---|---|
+| 1 | `BC C1 AB1F 4D 6778` | −88.0 dBFS | +39.8 kHz (+16.2 ppm) | 222 kHz |
+| 2 | `B8 C1 B273 4D 67B9` | −81.9 dBFS | −0.8 kHz (−0.3 ppm) | 215 kHz |
+
+* Both packets decode with 0 errors on the sync, in the same polarity
+  (higher frequency = `1`). T and W match the table in section 1.
+* The packets start 229 µs apart (231 µs in the dongle data).
+* **The two carrier offsets differ by 40.6 kHz (16.6 ppm).** This supports the
+  two-transmitter reading with a measurement that does not depend on distance.
+  A remote setpoint burst in the same capture will show which offset is the
+  remote's (`hackrf-plan.md`, experiment b).
+* Packet 2 is again the stronger one (6 dB), as in every earlier capture.
+* The tails read `6778` and `67B9` from clean IQ, which differ from the
+  dongle's `62B8` and the ESP's `6578`. One capture is not enough to fix the
+  tail value.
+* Deviation is about ±220 kHz, so the synthetic tests' 250 kHz is close.
