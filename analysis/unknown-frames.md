@@ -28,8 +28,9 @@ so the RAW hex starts at bit 24.
 * The odd strong frames in 20261103-202434 are **the remote's own header,
   received off-frequency**. 202852 and 205157 used the `9388B0CA` trigger, so they
   show only setpoint bursts, as expected.
-* Best guess: A is a query/reply exchange between the remote and the Cube. B is
-  probably the Cube, or a device near it. This is not proven; see the table at the end.
+* Best guess (updated 2026-11-07): families A and B come from another 2.4 GHz
+  device near the Cube, not from the remote or the Cube (see
+  `poll-reply.md` section 7). Family B's data rate is probably 333 kbit/s.
 
 ## Timeline of 20261104-172417 (all on 2450 MHz)
 
@@ -169,6 +170,9 @@ occur only in 172417.
 
 ## Q5. Interpretation
 
+Historical: disproved 2026-11-07, families A and B come from another device
+(see `poll-reply.md` section 7).
+
 | hypothesis | for | against |
 |---|---|---|
 | **A = remote query + Cube reply** (p1 remote, p2 Cube) | RSSI −45 equals the remote's. 0.625 s after UP, and inside the failed-DOWN window. Two packets with ≈140 µs turnaround, typical TX→RX→TX for nRF24/LT89xx-class radios. Same sync prefix with a 1-bit difference, so one network in two directions. p2 is not a resend of p1 | Not one of ≈40 presses in 202434 produced A. A uses unspread raw 1 Mbit framing, unlike the setpoint bursts. The dongle logs RSSI only for p1, so p2's source is unknown |
@@ -185,6 +189,9 @@ likely the Cube or a nearby device. RSSI from a radio placed beside the Cube wil
 decide who sends what.
 
 ## Recommended next capture
+
+Historical: disproved 2026-11-07, families A and B come from another device
+(see `poll-reply.md` section 7).
 
 1. **Dongle: 1 Mbit, channel 50 (2450 MHz), `l255`, trigger `632F4BBA`** (4 bytes,
    the bits right after A's preamble). The window then holds A packet 1 and

@@ -1,9 +1,10 @@
 # chilipad-sniffer — nRF52840 Dongle raw 2.4 GHz sniffer
 
 Second receiver next to the ESP8266 + nRF24L01+ promiscuous sniffer in
-`../src/main.cpp`. It turns a Nordic **nRF52840 Dongle (PCA10059)** into a raw
-2.4 GHz receiver for the proprietary LT8920-based remote (1 Mbps GFSK,
-2450 MHz) using nothing but the `NRF_RADIO` peripheral: no Bluetooth stack, no
+`../esp8266/src/main.cpp`. It turns a Nordic **nRF52840 Dongle (PCA10059)** into a raw
+2.4 GHz receiver for the proprietary LT8920-based remote (1 Mchip/s GFSK,
+where each 4-bit nibble is one of 16 64-chip codewords, i.e. 62.5 kbit/s of
+data; 2450 MHz) using nothing but the `NRF_RADIO` peripheral: no Bluetooth stack, no
 ESB library, no SoftDevice. It talks to the laptop over the dongle's USB CDC ACM
 serial port with the same line-based command style and the same `P <t> ... RAW
 <hex> | REV <hex>` packet format the ESP firmware uses, so the existing GUI can
@@ -11,14 +12,19 @@ read either receiver.
 
 ## Build
 
-Zephyr 4.4.2 + Zephyr SDK on the build host (there is no Zephyr on the laptop
-this repo lives on). From the repo root:
+Zephyr 4.4.2 + Zephyr SDK with a Zephyr workspace (check out this repository
+somewhere and call the build directory anything you like):
 
 ```sh
-rsync -a --delete nrf52/ user@buildhost:chilipad-rf/nrf52-src/
-ssh user@buildhost 'cd ~/zephyrproject && . .venv/bin/activate && \
-  west build -p always -b nrf52840dongle/nrf52840 -d ~/chilipad-rf/nrf52-build ~/chilipad-rf/nrf52-src'
+cd ~/zephyrproject && . .venv/bin/activate && \
+  west build -p always -b nrf52840dongle/nrf52840 -d build/nrf52 <repo>/nrf52
 ```
+
+You can also rsync `nrf52/` to another machine that has the Zephyr SDK and
+build it there. The firmware builds clean with Zephyr 4.4.2 for
+`nrf52840dongle/nrf52840` and `raytac_mdbt50q_cx_40_dongle/nrf52840`. The
+`uart0` command port (below) builds, but nobody has tested it on hardware
+yet.
 
 No snippet flag is needed: `nrf52840dongle` defaults to the CDC ACM serial
 backend (`BOARD_SERIAL_BACKEND_CDC_ACM`), which enables the Zephyr 4.4 USB
@@ -44,7 +50,7 @@ bootloader comes back. (From a product review, 2026-11; not yet tried here.)
 
 ```sh
 nrfutil nrf5sdk-tools pkg generate --hw-version 52 --sd-req=0x00 \
-    --application ~/chilipad-rf/nrf52-build/zephyr/zephyr.hex \
+    --application build/nrf52/zephyr/zephyr.hex \
     --application-version 1 app.zip
 
 # press the dongle's sideways RESET button (red LED pulses = bootloader), then:

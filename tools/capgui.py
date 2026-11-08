@@ -50,8 +50,8 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--out",
-        default=str(Path.home() / "chilipad-rf" / "captures"),
-        help="capture output directory",
+        default=str(Path(__file__).resolve().parents[1] / "captures"),
+        help="capture output directory (default: the repo's captures/)",
     )
     p.add_argument("--duration", default="30", help="capture length in seconds")
     p.add_argument("--note", default="", help="note saved in meta.txt")

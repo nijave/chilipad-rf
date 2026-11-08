@@ -3,7 +3,7 @@
  * running on a Nordic nRF52840 Dongle (PCA10059) under Zephyr.
  *
  * This is the nRF52 sibling of the ESP8266 + nRF24L01+ promiscuous sniffer in
- * ../../src/main.cpp.  Instead of Travis Goodspeed's "illegal 2-byte address"
+ * ../../esp8266/src/main.cpp.  Instead of Travis Goodspeed's "illegal 2-byte address"
  * trick it uses the nRF52840 RADIO peripheral directly: the LT8920's sync word
  * (or any 3..5 byte prefix of the frame after the preamble) is loaded as a
  * logical RX address, so the radio only ends a reception on a real frame.  The

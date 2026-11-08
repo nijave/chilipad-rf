@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install numpy
+          pip install uv
+      - name: IQ demodulator tests
+        run: cd analysis/scripts && python -m unittest test_iq
+      - name: Bridge self-test
+        run: cd bridge && uv run chilipad_bridge.py --selftest

@@ -2,8 +2,8 @@
 
 Host: PINE A64-DB-2G rev B, Fedora Minimal aarch64 (flashed with
 `arm-image-installer --target=pine64_plus`), rootless Podman with quadlets
-auto-updating from `registry.example.com`. OS choice and board notes are
-in the knowledge base (`personal/knowledge/systems/pine-a64-podman-host.md`).
+auto-updating from the image repository. For the image repository and the
+deployment steps, see `README.md`.
 
 ## Deploy
 

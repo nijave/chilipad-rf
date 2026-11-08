@@ -64,7 +64,7 @@ Wants=network-online.target
 [Service]
 User=<user>
 SupplementaryGroups=dialout
-WorkingDirectory=/opt/chilipad-rf/bridge
+WorkingDirectory=/opt/chilipad-rf/bridge   # your checkout
 EnvironmentFile=/etc/chilipad-bridge.env
 ExecStart=/usr/bin/uv run chilipad_bridge.py
 Restart=always
@@ -108,7 +108,9 @@ podman run --rm registry.example.com/chilipad-rf:latest --help
 podman run --rm --platform linux/arm64 registry.example.com/chilipad-rf:latest --help
 ```
 
-Push is manual:
+Push is manual: `--push` pushes to `$CHILIPAD_IMAGE_REPO` (default
+`registry.example.com/chilipad-rf`). Log in first if your registry needs it
+(`podman login <registry>`):
 
 ```sh
 ./build.sh --push             # pushes :<git sha> and :latest (both architectures)
@@ -258,3 +260,7 @@ unit, and rolls back if the new container does not start.
 * The firmware must support `S<degF>` and `O<degF>`. Older firmware answers
   `[?] unknown command`, and the bridge logs an error.
 * Units are °F only.
+
+See the disclaimer in the root [README](../README.md#disclaimer): this project
+is not affiliated with Sleepme Inc. or Kryo Inc., and you control a mattress
+appliance at your own risk.

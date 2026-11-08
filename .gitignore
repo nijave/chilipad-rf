@@ -1,3 +1,9 @@
 .pio/
 .vscode/
 captures/*/*.cs8
+__pycache__/
+.ruff_cache/
+.venv/
+build/
+*.jsonl
+bridge/chilipad-bridge.env

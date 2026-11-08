@@ -128,6 +128,9 @@ standard fits, and the data cannot pin down a custom polynomial.
 
 ## 5. Who sends what (hypothesis)
 
+Historical: disproved 2026-11-07, families A and B come from another device
+(see section 7).
+
 Established: two transmitters at steady, different levels. 185111 (devices
 stationary, 16 s): packet 1 −60/−61 and packet 2 −50/−51 every time, for both T types.
 Packet 2 follows packet 1 within ±0.5 µs. The first sender keeps a 100 ms tick and
@@ -146,6 +149,9 @@ the IDs never change and it runs during normal use. If the remote shows the Cube
 temperature, the data does not travel in this exchange.
 
 ## Next capture
+
+Historical: disproved 2026-11-07, families A and B come from another device
+(see section 7).
 
 1. **Dongle `w54C65E97 l24`** (gives the RSSI of both packets), radios fixed. Keep the remote
    awake: (1) remote 0.3 m from the radios for 20 s, then (2) remote 3 m away for 20 s, then
@@ -215,6 +221,10 @@ at about 35 s** for the rest of the capture. Labelled bursts:
   remote's offset or at a new, repeating offset. This matches the bridge's
   model that the Cube never transmits. Other channels remain open
   (`hackrf-plan.md`, experiment c).
+* No remote packet on any other channel after the unplug: `iq_demod.py`
+  scanned 2437–2455 MHz in 1 MHz steps over 33–90 s of 20261107-203533 and
+  found one `remote` label, a 70 µs noise burst (deviation 401 kHz, 2 bit
+  errors). This matches the single channel in the FCC report.
 * Remote behaviour (20261107-201142): UP/DOWN presses while the Cube was off
   sent no RF. The power press sent a normal set packet (`07 A5 44 48 …`,
   72 °F), and OFF sent `07 A5 50 48 …`.

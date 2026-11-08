@@ -16,7 +16,7 @@ Flags:
 |------|---------|---------|
 | `--esp PORT` | `/dev/ttyUSB0` | ESP8266 sniffer port; `none` to disable |
 | `--nrf PORT` | `/dev/ttyACM1` | nRF52840 USB CDC sniffer port; `none` to disable |
-| `--out DIR` | `~/chilipad-rf/captures` | directory that gets one sub-directory per session |
+| `--out DIR` | repo's `captures/` | directory that gets one sub-directory per session |
 
 Both devices are optional — the GUI works if either or both are missing or unplugged
 (a device shows `missing` and its thread retries the port every 2 s). The ESP port is

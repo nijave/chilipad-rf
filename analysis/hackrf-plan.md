@@ -58,7 +58,8 @@ Disk: `hackrf_transfer -r` writes 2 bytes per sample, 40 MB/s at 20 MS/s
 (2.4 GB per minute). Check `df` before long runs and always give `-n
 <seconds>`. Git ignores `captures/*/*.cs8`; `meta.txt` stays committable.
 
-The HackRF only receives in this plan. The bridge host keeps the nRF52
+The HackRF only receives in this plan. The bridge on the bridge host keeps
+the nRF52
 dongle in sniff mode and transmits when Home Assistant sends a command, so
 any capture can include bridge commands.
 

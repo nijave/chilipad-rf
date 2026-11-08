@@ -9,7 +9,8 @@ the known on-air patterns:
 
   remote  32-bit trigger 9388B0CA (SYNC4 of the setpoint-burst sync)
   famA    24-bit sync 632F4B of the poll/reply pair (header hex reported)
-  famB    40-bit header prefix 03486457DA of the long Cube frames
+  famB    40-bit header prefix 03486457DA of the family B frames (another
+          2.4 GHz device, not the Cube)
 
 Bit polarity as seen by the HackRF is unknown, so every burst is classified
 in both polarities and the matching one is reported (pol = +1 means the

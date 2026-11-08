@@ -7,7 +7,9 @@
 #   ./build.sh --push          # build, then push :<tag> and :latest
 #
 # Needs podman, and qemu-user-static (binfmt) for the foreign architecture.
-# --push pushes to $CHILIPAD_IMAGE_REPO.
+# The image repository comes from CHILIPAD_IMAGE_REPO
+# (default: registry.example.com/chilipad-rf). --push pushes there;
+# run `podman login <registry>` first if your registry requires it.
 set -euo pipefail
 
 REPO="${CHILIPAD_IMAGE_REPO:-registry.example.com/chilipad-rf}"
