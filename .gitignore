@@ -1,6 +1,6 @@
 .pio/
 .vscode/
-captures/*/*.cs8
+docs/captures/*/*.cs8
 __pycache__/
 .ruff_cache/
 .venv/

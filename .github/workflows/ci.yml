@@ -16,7 +16,7 @@ jobs:
           python-version: "3.15"
       - uses: astral-sh/setup-uv@v10.3.2
       - name: IQ demodulator tests
-        run: cd analysis/scripts && uv run --locked --project .. python -m unittest test_iq
+        run: cd docs/analysis/scripts && uv run --locked --project .. python -m unittest test_iq
       - name: Bridge self-test
         run: cd bridge && uv run --locked chilipad_bridge.py --selftest
 

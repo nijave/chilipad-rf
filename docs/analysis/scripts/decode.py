@@ -6,7 +6,7 @@
   * derives each block's true last bit (the "first-bit flip" rule)
   * builds an encoder from the decoded packet and checks it bit-for-bit against
     all captures; predicts the unseen tail for 76/77 F
-  * writes analysis/bursts/<sp>F.hex
+  * writes docs/analysis/bursts/<sp>F.hex
 
 Bit positions are counted from the first bit of the first 9388B0CA; byte
 offsets are pos/8 (".5" = nibble-shifted).
@@ -154,7 +154,7 @@ def main():
                 bad += end != DATA_END - 1
     P(f"  sweep/dongle/ESP blocks checked against encoder: {tot}, mismatches {bad}")
     # write bursts
-    (REPO / "analysis/bursts").mkdir(exist_ok=True)
+    (REPO / "docs/analysis/bursts").mkdir(exist_ok=True)
     P("== written ==")
     for sp in (74, 75, 76, 77):
         e = encode(sp, lastbit)[:FILE_BITS]
@@ -166,16 +166,16 @@ def main():
             assert e[:len(h)] == h
             src = f"captured bytes 0..{len(h)//8} + predicted tail (CRC-16/KERMIT)"
         hx = b2h(e)
-        (REPO / f"analysis/bursts/{sp}F.hex").write_text(hx + "\n")
+        (REPO / f"docs/analysis/bursts/{sp}F.hex").write_text(hx + "\n")
         # two nRF52 segments split before the internal 9388B0CA at byte 32:
         # seg1 = bytes 4..31 (after the leading address), seg2 = bytes 36..289
         assert hx[2 * SPLIT:2 * SPLIT + 8] == SYNC4
-        (REPO / f"analysis/bursts/{sp}F.seg1.hex").write_text(hx[8:2 * SPLIT] + "\n")
-        (REPO / f"analysis/bursts/{sp}F.seg2.hex").write_text(hx[2 * SPLIT + 8:] + "\n")
+        (REPO / f"docs/analysis/bursts/{sp}F.seg1.hex").write_text(hx[8:2 * SPLIT] + "\n")
+        (REPO / f"docs/analysis/bursts/{sp}F.seg2.hex").write_text(hx[2 * SPLIT + 8:] + "\n")
         hdr, pkt = logical(sp, sp - 60)
         P(f"  {sp}F.hex  {len(e)//8} bytes  packet {' '.join(f'{b:02X}' for b in pkt)}  [{src}]")
     print("\n".join(lines))
-    (REPO / "analysis/decode-output.txt").write_text("\n".join(lines) + "\n")
+    (REPO / "docs/analysis/decode-output.txt").write_text("\n".join(lines) + "\n")
 
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ from pathlib import Path
 log = logging.getLogger("chilipad")
 
 # ---------------------------------------------------------------------------
-# Radio packet model (from analysis/burst-structure.md and analysis/scripts/)
+# Radio packet model (from docs/analysis/burst-structure.md and docs/analysis/scripts/)
 # ---------------------------------------------------------------------------
 
 TRIGGER = "9388B0CA"  # dongle trigger address; RAW starts right after it
@@ -161,7 +161,7 @@ class Decode:
 class PressDecoder:
     """Match a burst (one or more windows) against every candidate setpoint.
 
-    Same method as analysis/scripts/identify_presses.py: place each window at
+    Same method as docs/analysis/scripts/identify_presses.py: place each window at
     the sum of the dt values since the first window (rounded to 4 bits), then
     count bit errors against the encoding of each candidate. Candidates are
     the setpoint (0x44) and off (0x50) presses for 40..100 degF, so that codes
@@ -936,7 +936,7 @@ def selftest(fixture_root: Path) -> int:
         "75 F packet + CRC-16/KERMIT",
     )
     check(packet(57)[-2:] == bytes([0x50, 0x22]), "57 F CRC 50 22")
-    burst75 = fixture_root / "analysis/bursts/75F.hex"
+    burst75 = fixture_root / "docs/analysis/bursts/75F.hex"
     if burst75.exists():
         hx = burst75.read_text().strip()
         bits = h2b(hx)
@@ -960,11 +960,11 @@ def selftest(fixture_root: Path) -> int:
     dec = PressDecoder()
     fixtures = [
         (
-            "captures/20261104-163310/nrf.log",
+            "docs/captures/20261104-163310/nrf.log",
             [75, 76, 77, 76, 75, 74],
         ),  # l255, 1 window
         (
-            "captures/20261103-202852/nrf.log",  # l64, 3 windows per press
+            "docs/captures/20261103-202852/nrf.log",  # l64, 3 windows per press
             [74, 75, 76, 77, 78, 79, 80, 79, 78, 77, 76, 75, 74, 73, 72],
         ),
     ]
@@ -972,7 +972,7 @@ def selftest(fixture_root: Path) -> int:
         path = fixture_root / rel
         print(f"decoder: {rel}")
         if not path.exists():
-            check(rel.startswith("captures/20261103"), f"{path} not found")
+            check(rel.startswith("docs/captures/20261103"), f"{path} not found")
             continue
         got: list[int | None] = []
 
@@ -1097,7 +1097,7 @@ def parse_args(argv=None):
         "--fixtures",
         type=Path,
         default=Path(__file__).resolve().parent.parent,
-        help="repo root holding captures/ and analysis/ (selftest)",
+        help="repo root holding docs/captures/ and docs/analysis/ (selftest)",
     )
     a = p.parse_args(argv)
     if not HW_MIN <= a.min <= a.max <= HW_MAX:

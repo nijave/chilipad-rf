@@ -3,7 +3,7 @@
 Scripts: `scripts/unknown_frames.py` (per-frame tests, output in
 `unknown-frames-output.txt`) and `scripts/unknown_search.py` (signature search over
 every nRF and ESP log, output in `unknown-search-output.txt`). Run them from
-`analysis/scripts`. Bit positions count from the first bit of the 3 trigger bytes,
+`docs/analysis/scripts`. Bit positions count from the first bit of the 3 trigger bytes,
 so the RAW hex starts at bit 24.
 
 ## Short version

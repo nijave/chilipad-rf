@@ -94,7 +94,7 @@ Files:
   `/app/.venv`; the runtime stage gets only that venv and
   `chilipad_bridge.py`, not uv. The image runs as the non-root user
   `chilipad` (UID 10001). `--selftest` does not work in the image (it needs
-  `captures/` from the repo). Run it from a checkout.
+  `docs/captures/` from the repo). Run it from a checkout.
 * `pyproject.toml`, `uv.lock`: dependencies and their pinned versions. After
   changing dependencies, run `uv lock` and commit both files.
 * `build.sh`: builds a manifest list for `linux/amd64` and `linux/arm64`.
@@ -258,7 +258,7 @@ unit, and rolls back if the new container does not start.
   sniffed. If a burst does not reach the Cube, Home Assistant still shows the
   new value. Changes made on the Cube's own buttons are not seen. HackRF
   captures and the FCC filings confirm that the Cube only receives
-  (`../analysis/poll-reply.md` section 7).
+  (`../docs/analysis/poll-reply.md` section 7).
 * After a power cut the Cube starts in the off state, but the bridge restores
   its last retained state. Home Assistant shows the old state until the next
   command or sniffed press. A set command (temperature or mode `auto`) turns

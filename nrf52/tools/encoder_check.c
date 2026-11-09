@@ -1,6 +1,6 @@
 /*
  * Host check for src/chili_encoder.h.  Prints "addr1 seg1 addr2 seg2" (hex)
- * per setpoint, in the format of analysis/scripts/gen_burst2.py, so the two
+ * per setpoint, in the format of docs/analysis/scripts/gen_burst2.py, so the two
  * can be diffed.  See tools/encoder_check.sh.
  *
  *   cc -std=c99 -Wall -Wextra -O2 -o encoder_check tools/encoder_check.c

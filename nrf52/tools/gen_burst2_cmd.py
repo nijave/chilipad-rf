@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""analysis/scripts/gen_burst2.py with a selectable command byte.
+"""docs/analysis/scripts/gen_burst2.py with a selectable command byte.
 
 usage: gen_burst2_cmd.py <degF> <cmdhex>     (44 = setpoint/ON, 50 = OFF)
 
@@ -10,7 +10,7 @@ import runpy
 import sys
 from pathlib import Path
 
-S = Path(__file__).resolve().parents[2] / "analysis" / "scripts"
+S = Path(__file__).resolve().parents[2] / "docs" / "analysis" / "scripts"
 sys.path.insert(0, str(S))
 import decode                      # noqa: E402
 from crc_search import crc16       # noqa: E402

@@ -2,8 +2,8 @@
 import re
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
-CAP = REPO / "captures"
+REPO = Path(__file__).resolve().parents[3]   # repo root (docs/analysis/scripts/..)
+CAP = REPO / "docs" / "captures"
 SYNC4 = "9388B0CA"          # first 4 bytes of the 8-byte sync, consumed by the trigger
 SYNC8 = "9388B0CAD019F2E6"
 

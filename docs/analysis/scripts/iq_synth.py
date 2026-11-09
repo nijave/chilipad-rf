@@ -11,7 +11,7 @@ The demo scene (default) contains, with quiet gaps between them:
 
   * a 72 degF remote setpoint burst at t = 1 ms: >= 52 us of '1' carrier,
     24 preamble bits (0x55 x3), then decode.encode(72, lastbit) where
-    lastbit is read from analysis/decode-output.txt the way gen_burst.py
+    lastbit is read from docs/analysis/decode-output.txt the way gen_burst.py
     does it.  CFO +8 kHz, deviation 250 kHz, amplitude 1.0.
   * a family A pair at t = 6 ms: packet 1 (CFO +20 kHz, amp 0.7) and
     packet 2 (CFO -35 kHz, amp 0.9), 231 us sync-to-sync.  Each packet is

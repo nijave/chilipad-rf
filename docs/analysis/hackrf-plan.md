@@ -3,7 +3,7 @@
 Goal: record raw IQ around 2450 MHz and demodulate it offline with
 `scripts/iq_demod.py`. The demodulator has a synthetic test suite
 (`scripts/iq_synth.py`, `scripts/test_iq.py`), so it works before the first
-real capture. Run all commands from `analysis/scripts/`.
+real capture. Run all commands from `docs/analysis/scripts/`.
 
 Open questions this plan targets:
 
@@ -56,7 +56,7 @@ finds no bursts.
 
 Disk: `hackrf_transfer -r` writes 2 bytes per sample, 40 MB/s at 20 MS/s
 (2.4 GB per minute). Check `df` before long runs and always give `-n
-<seconds>`. Git ignores `captures/*/*.cs8`; `meta.txt` stays committable.
+<seconds>`. Git ignores `docs/captures/*/*.cs8`; `meta.txt` stays committable.
 
 The HackRF only receives in this plan. The bridge on the bridge host keeps
 the nRF52
