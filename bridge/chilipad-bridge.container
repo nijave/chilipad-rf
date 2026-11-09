@@ -16,6 +16,9 @@ Description=ChiliPad Cube MQTT bridge (container)
 [Container]
 Image=ghcr.io/nijave/chilipad-rf:latest
 AutoUpdate=registry
+# Check the registry on every start; otherwise podman run reuses a stale
+# local :latest (seen 2026-11-09: a deploy restarted an old broken image).
+Pull=newer
 ContainerName=chilipad-bridge
 
 # CHILIPAD_MQTT_HOST, CHILIPAD_MQTT_USER, CHILIPAD_MQTT_PASSWORD, ...
