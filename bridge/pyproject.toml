@@ -1,0 +1,13 @@
+[project]
+name = "chilipad-bridge"
+version = "0.0.0"
+description = "Home Assistant MQTT bridge for the ChiliPad Cube through the chilipad-sniffer nRF52840 dongle"
+requires-python = ">=3.12"
+dependencies = [
+    "paho-mqtt>=2.0,<3",
+    "pyserial>=3.5",
+]
+
+[tool.uv]
+# A single script, not an installable package: uv only manages the venv.
+package = false
