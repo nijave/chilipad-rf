@@ -2,8 +2,9 @@
 
 `chilipad_bridge.py` connects the `chilipad-sniffer` dongle (nRF52840, see
 `../nrf52/README.md`) to an MQTT broker. Home Assistant then shows the Cube as
-a `climate` entity. The script is one file with inline dependencies
-(PEP 723: `pyserial`, `paho-mqtt>=2.0`), so `uv run` installs them.
+a `climate` entity. The script is one file. `pyproject.toml` declares its
+dependencies (`pyserial`, `paho-mqtt>=2.0`) and `uv.lock` pins them, so
+`uv run` from `bridge/` installs the locked versions.
 
 What it does:
 
@@ -88,10 +89,14 @@ Then `systemctl daemon-reload && systemctl enable --now chilipad-bridge`.
 
 Files:
 
-* `Containerfile`: `python:3.12.16-slim-trixie`, pip installs `pyserial`
-  and `paho-mqtt>=2.0`, copies only `chilipad_bridge.py` to `/app`. The image
-  runs as the non-root user `chilipad` (UID 10001). `--selftest` does not work
-  in the image (it needs `captures/` from the repo). Run it from a checkout.
+* `Containerfile`: two stages on `python:3.15.2-slim-trixie`. The builder
+  runs `uv sync --locked` from `pyproject.toml` and `uv.lock` into
+  `/app/.venv`; the runtime stage gets only that venv and
+  `chilipad_bridge.py`, not uv. The image runs as the non-root user
+  `chilipad` (UID 10001). `--selftest` does not work in the image (it needs
+  `captures/` from the repo). Run it from a checkout.
+* `pyproject.toml`, `uv.lock`: dependencies and their pinned versions. After
+  changing dependencies, run `uv lock` and commit both files.
 * `build.sh`: builds a manifest list for `linux/amd64` and `linux/arm64`.
 * `chilipad-bridge.container`: rootless quadlet (user unit) for the Pine A64.
 * `chilipad-bridge.env.example`: example env file, no secrets.

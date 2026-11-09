@@ -14,14 +14,13 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.15"
-      - name: Install dependencies
-        run: |
-          pip install numpy
-          pip install uv
+      - uses: astral-sh/setup-uv@v10.3.2
+      - name: Install analysis dependencies
+        run: pip install numpy
       - name: IQ demodulator tests
         run: cd analysis/scripts && python -m unittest test_iq
       - name: Bridge self-test
-        run: cd bridge && uv run chilipad_bridge.py --selftest
+        run: cd bridge && uv run --locked chilipad_bridge.py --selftest
 
   # Bridge image: ghcr.io/<owner>/chilipad-rf. Pull requests build it without
   # pushing; main pushes :latest and :<short sha> (the tags bridge/build.sh
@@ -52,6 +51,18 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=,format=short
             type=semver,pattern={{raw}}
+      # Smoke test before any push: the amd64 image must start as its
+      # non-root user.
+      - uses: docker/build-push-action@v7
+        with:
+          context: bridge
+          file: bridge/Containerfile
+          platforms: linux/amd64
+          load: true
+          tags: chilipad-rf:smoke
+          cache-from: type=gha
+      - name: Smoke test
+        run: docker run --rm chilipad-rf:smoke --help
       - uses: docker/build-push-action@v7
         with:
           context: bridge

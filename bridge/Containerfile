@@ -3,7 +3,8 @@
 # Build both architectures with ./build.sh. Single-arch local build:
 #   podman build -t chilipad-bridge:dev -f Containerfile .
 #
-# Only chilipad_bridge.py goes into the image. The --selftest mode reads
+# Only chilipad_bridge.py and the locked dependencies (uv.lock) go into the
+# image; uv itself stays in the builder stage. The --selftest mode reads
 # captures/ and analysis/ from the repo, so run it from a checkout, not here.
 #
 # Serial access: the image runs as the non-root user "chilipad" (UID 10001).
@@ -12,6 +13,20 @@
 # --group-add keep-groups (quadlet GroupAdd=keep-groups) so the process keeps
 # the host user's supplementary groups, including dialout. See README.md.
 
+FROM ghcr.io/astral-sh/uv:0.13.6 AS uv
+
+# Builder: resolve exactly what uv.lock pins into /app/.venv.
+FROM docker.io/library/python:3.15.2-slim-trixie AS build
+COPY --from=uv /uv /usr/local/bin/uv
+ENV UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_PROJECT_ENVIRONMENT=/app/.venv
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --locked --no-dev --no-install-project
+
+# Runtime: the same base image, so the venv's python symlink resolves.
 FROM docker.io/library/python:3.15.2-slim-trixie
 
 ARG VERSION=dev
@@ -23,18 +38,18 @@ LABEL org.opencontainers.image.title="chilipad-bridge" \
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_ROOT_USER_ACTION=ignore
+    PATH=/app/.venv/bin:$PATH
 
-# Dependencies from the PEP 723 header of chilipad_bridge.py.
-RUN pip install --no-cache-dir "pyserial==3.5" "paho-mqtt>=2.0,<3" \
- && useradd --uid 10001 --user-group --no-create-home \
+RUN useradd --uid 10001 --user-group --no-create-home \
         --home-dir /nonexistent --shell /usr/sbin/nologin chilipad
 
-COPY --chmod=0644 chilipad_bridge.py /app/chilipad_bridge.py
+# WORKDIR first, so /app exists as 0755 before the copies. BuildKit's
+# COPY --chmod would also apply its mode to a parent directory it creates,
+# which left /app without the execute bit.
+WORKDIR /app
+COPY --from=build /app/.venv /app/.venv
+COPY chilipad_bridge.py /app/chilipad_bridge.py
 
 USER 10001:10001
-WORKDIR /app
 
-ENTRYPOINT ["python", "/app/chilipad_bridge.py"]
+ENTRYPOINT ["/app/.venv/bin/python", "/app/chilipad_bridge.py"]

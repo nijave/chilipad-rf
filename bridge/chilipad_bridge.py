@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-# /// script
-# requires-python = ">=3.10"
-# dependencies = ["pyserial", "paho-mqtt>=2.0"]
-# ///
 """Home Assistant MQTT bridge for the ChiliPad Cube, through the chilipad-sniffer dongle.
 
 The dongle (nRF52840, USB CDC ACM, product "chilipad-sniffer") sends a setpoint
