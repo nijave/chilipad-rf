@@ -2242,7 +2242,7 @@ static bool parse_setpoint(const char *arg, uint32_t *sp, uint32_t *n,
 
 /* "T<degF>" / "TO<degF>": print "addr1 seg1 addr2 seg2" for the setpoint
  * (cmd 0x44) / power OFF (cmd 0x50) press, exactly as
- * analysis/scripts/gen_burst2.py <degF> (or tools/gen_burst2_cmd.py
+ * docs/analysis/scripts/gen_burst2.py <degF> (or tools/gen_burst2_cmd.py
  * <degF> 50) does, for a diff on the host.  Sends nothing. */
 static void cmd_setpoint_print(const char *arg)
 {

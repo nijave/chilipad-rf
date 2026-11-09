@@ -8,5 +8,5 @@ dependencies = [
 ]
 
 [tool.uv]
-# Scripts run from analysis/scripts, not an installable package.
+# Scripts run from docs/analysis/scripts, not an installable package.
 package = false

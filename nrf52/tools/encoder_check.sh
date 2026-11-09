@@ -5,7 +5,7 @@
 # 0x44 and the power OFF press (0x50).  Run from anywhere; needs cc, python3.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
-scripts="$here/../../analysis/scripts"
+scripts="$here/../../docs/analysis/scripts"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 cc -std=c99 -Wall -Wextra -Werror -O2 -o "$tmp/encoder_check" "$here/encoder_check.c"

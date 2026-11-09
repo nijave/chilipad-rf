@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # hackrf_capture.sh — record a HackRF IQ capture (cs8) with metadata.
 #
-# Creates captures/<YYYYMMDD-HHMMSS>-hackrf/, writes meta.txt (start epoch
+# Creates docs/captures/<YYYYMMDD-HHMMSS>-hackrf/, writes meta.txt (start epoch
 # with ns, frequency, sample rate, LNA/VGA gains, amp flag, note), runs
 # hackrf_transfer -r iq.cs8 — for --seconds or until Ctrl-C — then appends
 # the end time and exit code.  RX only; iq.cs8 is interleaved signed int8
-# I/Q ("cs8"), directly readable by analysis/scripts/iq_demod.py.
+# I/Q ("cs8"), directly readable by docs/analysis/scripts/iq_demod.py.
 #
 # usage: hackrf_capture.sh [-f Hz] [-s rate] [-l LNA_dB] [-g VGA_dB]
 #        [-a 0|1] [-n seconds] [-m "note"]
@@ -41,9 +41,9 @@ done
 # keep going after Ctrl-C so the end time still gets written
 trap : INT
 
-repo=$(cd "$(dirname "$0")/../.." && pwd)
+repo=$(cd "$(dirname "$0")/../../.." && pwd)
 stamp=$(date +%Y%m%d-%H%M%S)
-dir="$repo/captures/${stamp}-hackrf"
+dir="$repo/docs/captures/${stamp}-hackrf"
 mkdir -p "$dir"
 
 start_ns=$(date +%s%N)

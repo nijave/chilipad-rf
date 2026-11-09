@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Print the two nRF52 TX segments (seg1 seg2, hex) for a setpoint in degF.
-usage: gen_burst.py <setpoint>   (run from analysis/scripts)"""
+usage: gen_burst.py <setpoint>   (run from docs/analysis/scripts)"""
 import re, sys
 from pathlib import Path
 from rfcommon import b2h

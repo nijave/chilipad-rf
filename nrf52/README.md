@@ -84,7 +84,7 @@ it with any serial terminal, 115200 baud (the CDC ACM baud rate is ignored).
 | `k<ms>b0` / `k<ms>b1` | same, but `DTX = B0` / `B1`: the constant '0' / '1' FSK tone instead of the center frequency (`<mode>` is `b0` / `b1`) |
 | `S<degF>[,<n>]` | set the Cube to `<degF>` (55..93): encode the press burst, send it `n` times (default 1, max 10, 100 ms apart), print `[S] <degF> sent`. See [Setting the Cube's temperature](#setting-the-cubes-temperature-s) |
 | `O<degF>[,<n>]` | power the Cube OFF (command byte `0x50`). `<degF>` is the Cube's current setpoint, 55..93 (the dongle does not know it). Prints `[O] OFF @ <degF> sent`. Power ON is any `S<degF>` |
-| `T<degF>` / `TO<degF>` | print `addr1 seg1 addr2 seg2` (hex) of the `S<degF>` / `O<degF>` burst, the same line `analysis/scripts/gen_burst2.py <degF>` (or `nrf52/tools/gen_burst2_cmd.py <degF> 50`) prints. Sends nothing |
+| `T<degF>` / `TO<degF>` | print `addr1 seg1 addr2 seg2` (hex) of the `S<degF>` / `O<degF>` burst, the same line `docs/analysis/scripts/gen_burst2.py <degF>` (or `nrf52/tools/gen_burst2_cmd.py <degF> 50`) prints. Sends nothing |
 | `d` | radio register dump, ISR counters, `[d] rate=<mode> us_per_byte=<n>`, and TX totals `[d] tx ready=<n> end=<n> timeouts=<n> last_gap_us=<n>`, UART port counters `[d] uart drops=<n> rx_lost=<n> ready=<0\|1>` |
 
 Output is one line per packet:
@@ -352,9 +352,9 @@ How it works:
    for example `07 A5 50 48 40 40 00 18` at 72 °F). Power ON is a normal
    `0x44` press. Each nibble (low nibble first) becomes its
    64-bit codeword. This is a C port of `encode()` in
-   `analysis/scripts/decode.py` (see `analysis/burst-structure.md`).
+   `docs/analysis/scripts/decode.py` (see `docs/analysis/burst-structure.md`).
 2. It splits the 2320-bit stream into two equal 154-byte nRF52 packets, as
-   `analysis/scripts/gen_burst2.py` does. The split is at stream bit 1053,
+   `docs/analysis/scripts/gen_burst2.py` does. The split is at stream bit 1053,
    where the stream itself contains an nRF preamble byte. That point is
    inside the codeword of packet byte `07`, so it is the same for every
    command and setpoint. The encoder checks the preamble pattern anyway and
@@ -389,6 +389,6 @@ On the dongle, compare `T<degF>` with the Python output for the same
 setpoint:
 
 ```sh
-python3 analysis/scripts/gen_burst2.py 74        # = T74
+python3 docs/analysis/scripts/gen_burst2.py 74        # = T74
 python3 nrf52/tools/gen_burst2_cmd.py 72 50      # = TO72
 ```

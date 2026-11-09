@@ -1,8 +1,8 @@
 """Analysis of strong nRF frames that do not decode with the 16-codeword book.
 
-Run from analysis/scripts:  python3 unknown_frames.py [section ...]
+Run from docs/analysis/scripts:  python3 unknown_frames.py [section ...]
 Sections: list align runs end period whiten codebook all (default all).
-Output: analysis/unknown-frames-output.txt; summary in analysis/unknown-frames.md.
+Output: docs/analysis/unknown-frames-output.txt; summary in docs/analysis/unknown-frames.md.
 """
 import sys
 from collections import Counter

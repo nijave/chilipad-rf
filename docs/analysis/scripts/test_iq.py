@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for iq_synth.py and iq_demod.py (stdlib unittest + numpy).
 
-Run from analysis/scripts:
+Run from docs/analysis/scripts:
 
     python3 test_iq.py
 

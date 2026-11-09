@@ -1,6 +1,6 @@
 """Family A ("poll/reply pairs"): bit alignment, timing, CRC/length search.
 
-Run from analysis/scripts:  python3 poll_reply.py > ../poll-reply-output.txt
+Run from docs/analysis/scripts:  python3 poll_reply.py > ../poll-reply-output.txt
 See ../poll-reply.md for the write-up.
 
 Every instance is turned into an on-air bit string (trigger bytes + RAW) and the

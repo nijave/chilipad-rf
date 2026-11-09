@@ -5,7 +5,7 @@
 #
 # Only chilipad_bridge.py and the locked dependencies (uv.lock) go into the
 # image; uv itself stays in the builder stage. The --selftest mode reads
-# captures/ and analysis/ from the repo, so run it from a checkout, not here.
+# docs/captures/ and docs/analysis/ from the repo, so run it from a checkout, not here.
 #
 # Serial access: the image runs as the non-root user "chilipad" (UID 10001).
 # It does not run as root to open the dongle. Rootless Podman passes the host

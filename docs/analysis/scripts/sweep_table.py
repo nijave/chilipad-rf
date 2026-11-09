@@ -2,10 +2,10 @@
 
 Sources
   * 20261103-203934 nrf.log: 64-byte dongle windows, positions from the dt timer.
-  * analysis/setpoint-f4.csv: ESP frame 4 (32 bytes), placed by matching overlap.
+  * docs/analysis/setpoint-f4.csv: ESP frame 4 (32 bytes), placed by matching overlap.
   * 20261104-163310 + 20261104-164149: 255-byte head and tail windows (74..77 F).
 Positions are in bits from the first bit of the first 9388B0CA (byte view: pos/8).
-Prints a table and writes analysis/setpoint-nibbles.csv.
+Prints a table and writes docs/analysis/setpoint-nibbles.csv.
 """
 import csv
 from rfcommon import *
@@ -64,7 +64,7 @@ def place_esp(known, f4hex):
 
 def collect():
     data = {}  # setpoint -> list of (source, known, end)
-    rows = list(csv.DictReader(open(REPO / "analysis/setpoint-f4.csv")))
+    rows = list(csv.DictReader(open(REPO / "docs/analysis/setpoint-f4.csv")))
     for grp in bursts(parse_nrf(CAP / "20261103-203934/nrf.log")):
         r = min(rows, key=lambda r: abs(float(r["t_capture_s"]) - grp[0]["t"]))
         known, end = from_dongle_burst(grp)
@@ -108,7 +108,7 @@ if __name__ == "__main__":
             if "unplaced" in src:
                 print(sp, src)
     hdr = ["setpoint_F"] + [f"{p}:{n}" for p, n in FIELD.items()] + ["end_B"]
-    w = csv.writer(open(REPO / "analysis/setpoint-nibbles.csv", "w", newline=""))
+    w = csv.writer(open(REPO / "docs/analysis/setpoint-nibbles.csv", "w", newline=""))
     w.writerow(hdr)
     print(f"{'sp':>3} " + " ".join(f"{n:>8}" for n in FIELD.values()) + "   end   set  s-60  crc")
     for sp in sorted(comb):

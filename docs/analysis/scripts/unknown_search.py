@@ -1,6 +1,6 @@
 """Search every nRF and ESP capture line for the signatures of the unknown frames.
 
-Run from analysis/scripts:  python3 unknown_search.py
+Run from docs/analysis/scripts:  python3 unknown_search.py
 Each signature is searched at every bit offset, plain and inverted, in the on-air
 bit stream (trigger + RAW).  A hit is <= 12% bit errors over the signature length.
 """

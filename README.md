@@ -8,9 +8,9 @@ MQTT bridge exposes the Cube to Home Assistant as a climate entity.
 
 This project decoded the remote's protocol, and the dongle sends the
 remote's setpoint and off presses. See
-[`analysis/burst-structure.md`](analysis/burst-structure.md). The Cube only
+[`docs/analysis/burst-structure.md`](docs/analysis/burst-structure.md). The Cube only
 receives; it never transmits, so there is no state feedback. The remote keeps
-its own on/off state. See [`analysis/poll-reply.md`](analysis/poll-reply.md)
+its own on/off state. See [`docs/analysis/poll-reply.md`](docs/analysis/poll-reply.md)
 sections 6–7.
 
 ## Hardware
@@ -19,7 +19,7 @@ sections 6–7.
 * A Linux host for the MQTT bridge (anything that runs Python and `uv`).
 * An MQTT broker and Home Assistant.
 * Optional: an ESP8266 with an nRF24L01+ as the original sniffer
-  (`esp8266/`), and a HackRF for IQ analysis (`analysis/hackrf-plan.md`).
+  (`esp8266/`), and a HackRF for IQ analysis (`docs/analysis/hackrf-plan.md`).
 
 ## Quick start
 
@@ -33,15 +33,15 @@ sections 6–7.
 | `esp8266/` | ESP8266 + nRF24L01+ promiscuous sniffer sketch (`esp8266/README.md`) |
 | `nrf52/` | Zephyr firmware for the nRF52840 dongle: sniffer, replay, `S<degF>` / `O<degF>` controller commands |
 | `bridge/` | serial → MQTT bridge that exposes the Cube as a Home Assistant climate entity |
-| `analysis/` | decoder, encoder, burst generators, analysis scripts and write-ups (`hackrf-plan.md` covers HackRF IQ captures) |
-| `captures/` | raw capture logs |
+| `docs/analysis/` | decoder, encoder, burst generators, analysis scripts and write-ups (`hackrf-plan.md` covers HackRF IQ captures) |
+| `docs/captures/` | raw capture logs |
 | `tools/` | `capgui.py` capture GUI with a visible clock for filmed runs |
 
 ## Tests
 
 ```sh
-cd analysis/scripts && python3 -m unittest test_iq
-cd bridge && uv run chilipad_bridge.py --selftest
+cd docs/analysis/scripts && uv run --locked --project .. python -m unittest test_iq
+cd bridge && uv run --locked chilipad_bridge.py --selftest
 ```
 
 ## Acknowledgements

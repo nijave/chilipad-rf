@@ -1,8 +1,8 @@
 /*
  * chili_encoder.h: header-only encoder for the ChiliPad Cube setpoint burst.
  *
- * C port of encode() in analysis/scripts/decode.py and of the two-segment
- * split in analysis/scripts/gen_burst2.py.  Shared by src/main.c (firmware)
+ * C port of encode() in docs/analysis/scripts/decode.py and of the two-segment
+ * split in docs/analysis/scripts/gen_burst2.py.  Shared by src/main.c (firmware)
  * and tools/encoder_check.c (host check against the Python reference), so it
  * uses only <stdint.h>, <stdbool.h> and <string.h>.
  *

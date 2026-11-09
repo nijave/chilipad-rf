@@ -27,7 +27,7 @@ def to_bytes(bits, lsb_first):
 
 
 def main():
-    burst = h2b(open(REPO / "analysis/bursts/75F.hex").read().strip())[:2309]
+    burst = h2b(open(REPO / "docs/analysis/bursts/75F.hex").read().strip())[:2309]
     S = h2b("9388B0CAD019F2E6")
     starts = [i for i in range(len(burst) - 63) if sum(a != b for a, b in zip(burst[i + 1:i + 64], S[1:])) <= 2]
     print("S block positions (bytes):", [p / 8 for p in starts])

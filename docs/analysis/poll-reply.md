@@ -1,6 +1,6 @@
 # Family A: poll/reply pairs
 
-Script: `scripts/poll_reply.py`; run it from `analysis/scripts`. The output is in
+Script: `scripts/poll_reply.py`; run it from `docs/analysis/scripts`. The output is in
 `poll-reply-output.txt`. Data: 172417 (2 events), 184432 (energy run), 184855
 (dongle `632F4B` l48 + ESP `632F4BBA`, 7 events) and 185111 (dongle `54C65E97`
 l24 + ESP `632F4B`, 6 events). That gives 15 events and 48 sync hits
@@ -170,7 +170,7 @@ A 3 s smoke test from a laptop (HackRF Pro, 2446 MHz centre, 20 MS/s, LNA
 24 / VGA 20, amp off). The laptop sat away from the Cube, and nobody touched
 the remote. `iq_demod.py` found one family A pair at t = 2.345 s; the rest of
 the 256 bursts are weak unknowns (Wi-Fi/BLE). Output:
-`captures/20261107-194951-hackrf/demod.txt`.
+`docs/captures/20261107-194951-hackrf/demod.txt`.
 
 | packet | T C1 W 4D tail | power | CFO | deviation |
 |---|---|---|---|---|
@@ -195,7 +195,7 @@ Experiment b from `hackrf-plan.md`, 90 s, LNA 24 / VGA 20, laptop about 2 m
 from the Cube, an on-screen timer (`scripts/capture_timer.py`) for the
 steps. Power press at about 10 s, UP at 20 s, DOWN at 30 s, **Cube unplugged
 at about 35 s** for the rest of the capture. Labelled bursts:
-`captures/20261107-203533-hackrf/labelled.txt`.
+`docs/captures/20261107-203533-hackrf/labelled.txt`.
 
 | source | events | CFO |
 |---|---|---|

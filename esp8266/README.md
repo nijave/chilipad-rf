@@ -15,7 +15,7 @@ of 16 64-chip codewords, so a press carries 62.5 kbit/s of data over the air.
 The generic "payload | CRC16" frame description in the LT8920 datasheet
 describes that chip's normal mode, not what this remote sends. For the
 remote's real burst structure (codewords, the 64-bit sync word, the CRC), see
-`../analysis/burst-structure.md`.
+`../docs/analysis/burst-structure.md`.
 
 The nRF24 cannot decode the codewords. This sniffer recovers the raw
 bitstream: any 2-byte "address" match clocks in a fixed 32-byte window of
