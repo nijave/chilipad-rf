@@ -96,28 +96,36 @@ Files:
 * `chilipad-bridge.container`: rootless quadlet (user unit) for the Pine A64.
 * `chilipad-bridge.env.example`: example env file, no secrets.
 
-### Build and push
+### Image
 
-On the build machine (x86_64, with `qemu-user-static` for arm64):
+CI (`.github/workflows/ci.yml`) builds `linux/amd64` and `linux/arm64` after
+the tests pass and publishes `ghcr.io/nijave/chilipad-rf`:
 
-```sh
-cd bridge
-./build.sh                    # tag YYYYMMDD-<script sha> and latest, no push
-./build.sh --tag 1.0.0        # explicit tag
-podman run --rm registry.example.com/chilipad-rf:latest --help
-podman run --rm --platform linux/arm64 registry.example.com/chilipad-rf:latest --help
-```
-
-Push is manual: `--push` pushes to `$CHILIPAD_IMAGE_REPO` (default
-`registry.example.com/chilipad-rf`). Log in first if your registry needs it
-(`podman login <registry>`):
+* every push to `main`: `:latest` and `:<short git sha>`;
+* a `v*` git tag: that tag as written (`:v1.0.0`);
+* pull requests: build only, no push.
 
 ```sh
-./build.sh --push             # pushes :<git sha> and :latest (both architectures)
+podman run --rm ghcr.io/nijave/chilipad-rf:latest --help
 ```
 
 `AutoUpdate=registry` compares the digest behind the tag named in the
-quadlet, so the quadlet pins `:latest` and every push moves it.
+quadlet, so the quadlet pins `:latest` and every merge to `main` moves it.
+
+To build locally instead (x86_64 with `qemu-user-static` for arm64), or to
+push to your own registry, use `build.sh`:
+
+```sh
+cd bridge
+./build.sh                    # tag <short git sha> and latest, no push
+./build.sh --tag 1.0.0        # explicit tag
+CHILIPAD_IMAGE_REPO=registry.example.com/chilipad-rf ./build.sh --push
+```
+
+`--push` pushes `:<tag>` and `:latest` (both architectures) to
+`$CHILIPAD_IMAGE_REPO` (default `ghcr.io/nijave/chilipad-rf`). Log in first
+if the registry needs it (`podman login <registry>`). Point the quadlet's
+`Image=` at the same repository.
 
 ### Install on the Pine
 
@@ -157,7 +165,7 @@ in your home, and auto-update runs from your own timer.
 4. Start it:
 
    ```sh
-   podman pull registry.example.com/chilipad-rf:latest
+   podman pull ghcr.io/nijave/chilipad-rf:latest
    systemctl --user daemon-reload
    systemctl --user start chilipad-bridge
    systemctl --user status chilipad-bridge
@@ -221,7 +229,7 @@ unit, and rolls back if the new container does not start.
   systemctl --user stop chilipad-bridge
   podman run --rm --group-add keep-groups \
       --device /dev/serial/by-id/usb-chilipad-rf_chilipad-sniffer_<serial>-if00:/dev/chilipad \
-      registry.example.com/chilipad-rf:latest --port /dev/chilipad --once 72
+      ghcr.io/nijave/chilipad-rf:latest --port /dev/chilipad --once 72
   systemctl --user start chilipad-bridge
   ```
 

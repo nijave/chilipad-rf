@@ -8,11 +8,11 @@
 #
 # Needs podman, and qemu-user-static (binfmt) for the foreign architecture.
 # The image repository comes from CHILIPAD_IMAGE_REPO
-# (default: registry.example.com/chilipad-rf). --push pushes there;
+# (default: ghcr.io/nijave/chilipad-rf). --push pushes there;
 # run `podman login <registry>` first if your registry requires it.
 set -euo pipefail
 
-REPO="${CHILIPAD_IMAGE_REPO:-registry.example.com/chilipad-rf}"
+REPO="${CHILIPAD_IMAGE_REPO:-ghcr.io/nijave/chilipad-rf}"
 PLATFORMS="${CHILIPAD_PLATFORMS:-linux/amd64,linux/arm64}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 tag=""

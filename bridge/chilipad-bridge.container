@@ -14,7 +14,7 @@
 Description=ChiliPad Cube MQTT bridge (container)
 
 [Container]
-Image=registry.example.com/chilipad-rf:latest
+Image=ghcr.io/nijave/chilipad-rf:latest
 AutoUpdate=registry
 ContainerName=chilipad-bridge
 
