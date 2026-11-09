@@ -1,0 +1,12 @@
+[project]
+name = "chilipad-analysis"
+version = "0.0.0"
+description = "Decoders, IQ demodulator and analysis scripts for the ChiliPad Cube remote"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2",
+]
+
+[tool.uv]
+# Scripts run from analysis/scripts, not an installable package.
+package = false
