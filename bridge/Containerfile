@@ -12,7 +12,7 @@
 # --group-add keep-groups (quadlet GroupAdd=keep-groups) so the process keeps
 # the host user's supplementary groups, including dialout. See README.md.
 
-FROM docker.io/library/python:3.12.16-slim-trixie
+FROM docker.io/library/python:3.15.2-slim-trixie
 
 ARG VERSION=dev
 
