@@ -4,5 +4,25 @@
   "automerge": false,
   "lockFileMaintenance": {
     "enabled": true
-  }
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "PlatformIO platform pin in esp8266/platformio.ini (Renovate has no PlatformIO manager)",
+      "managerFilePatterns": ["/(^|/)platformio\\.ini$/"],
+      "matchStrings": ["platform\\s*=\\s*espressif8266@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "platformio/platform-espressif8266",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    },
+    {
+      "customType": "regex",
+      "description": "RF24 library pin in esp8266/platformio.ini",
+      "managerFilePatterns": ["/(^|/)platformio\\.ini$/"],
+      "matchStrings": ["nrf24/RF24@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "nRF24/RF24",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    }
+  ]
 }
