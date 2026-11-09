@@ -89,7 +89,7 @@ Then `systemctl daemon-reload && systemctl enable --now chilipad-bridge`.
 
 Files:
 
-* `Containerfile`: two stages on `python:3.12.16-slim-trixie`. The builder
+* `Containerfile`: two stages on `python:3.15.2-slim-trixie`. The builder
   runs `uv sync --locked` from `pyproject.toml` and `uv.lock` into
   `/app/.venv`; the runtime stage gets only that venv and
   `chilipad_bridge.py`, not uv. The image runs as the non-root user
