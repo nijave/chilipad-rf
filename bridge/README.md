@@ -14,9 +14,32 @@ What it does:
 * Sniff mode (on by default) keeps the dongle receiving with
   `c50 mb1 l64 w9388B0CA` + `p`. The bridge decodes each remote press
   (setpoint or off) and publishes it, so Home Assistant follows manual
-  changes. The bridge stops capture before each send and starts it again after.
-* The bridge waits up to 3 s for `[tx] sent=1 ... timeouts=0` and retries
-  once. If the send fails, it publishes the previous state again.
+  changes. The bridge stops capture before each press and starts it again
+  after the press's last burst.
+* Each press goes out three times (`--repeat`): the bridge sends three
+  single-burst commands (`S72`, `S72`, `S72`). The Cube sends no
+  acknowledgement, and a single burst can be lost: on 2026-11-11 the dongle
+  logged 13 single-burst setpoint changes as sent and the Cube missed at
+  least one of them. A press carries an absolute setpoint, so the repeats
+  change nothing when the first one arrives. The remote itself sends one
+  burst per press.
+* The bursts are 100 ms ± 25 ms apart, start to start, with each gap drawn
+  at random. The bridge times each gap from when it wrote the previous
+  command, not from the dongle's reply (20–50 ms later); if a reply is
+  slower than the gap, the next command goes out at once. The bridge does
+  not use the firmware's `S72,3`, whose bursts are exactly 100 ms apart. A
+  HackRF capture at the bed on the evening of 2026-11-11 showed a 2.6 ms
+  transmission every 102.4 ms on 2450–2452 MHz (a Wi-Fi beacon interval).
+  A fixed 100 ms spacing moves each repeat only 0.4 ms against such a
+  beacon, so if the first burst (also about 2.6 ms) collides, the repeats
+  can collide too. Whether the beacon caused the missed command is not
+  known.
+* For each burst the bridge waits up to 3 s for `[tx] sent=1 ... timeouts=0`
+  and retries once. It logs one line per press with the gaps it used. If no
+  burst is confirmed, it publishes the previous state again. If a burst
+  fails after an earlier one was confirmed, the bridge stops the group, logs
+  a warning and keeps the new state, because the Cube may already have
+  acted.
 
 ## Install and run
 
@@ -40,7 +63,8 @@ Options (environment variable in brackets): `--port` (`CHILIPAD_PORT`),
 (`CHILIPAD_MQTT_PASSWORD`), `--name` ("ChiliPad Cube"), `--unique-id`
 (`chilipad_cube`), `--units F`, `--min 55`, `--max 93`,
 `--default-setpoint` (`CHILIPAD_DEFAULT_SETPOINT`, 72), `--no-sniff`,
-`--device-id` (`CHILIPAD_DEVICE_ID`, 4040), `--log-level`. Give the password through the environment: a command-line
+`--repeat` (`CHILIPAD_REPEAT`, 3), `--device-id` (`CHILIPAD_DEVICE_ID`,
+4040), `--log-level`. Give the password through the environment: a command-line
 value is visible in `ps`. The bridge never logs it.
 
 The Cube sends no feedback, so the bridge only knows a setpoint it sent,
@@ -255,8 +279,8 @@ unit, and rolls back if the new container does not start.
 ## Limits
 
 * The Cube sends no feedback. The state is the last value the bridge sent or
-  sniffed. If a burst does not reach the Cube, Home Assistant still shows the
-  new value. Changes made on the Cube's own buttons are not seen. HackRF
+  sniffed. If no burst of a press reaches the Cube, Home Assistant still
+  shows the new value. Changes made on the Cube's own buttons are not seen. HackRF
   captures and the FCC filings confirm that the Cube only receives
   (`../docs/analysis/poll-reply.md` section 7).
 * After a power cut the Cube starts in the off state, but the bridge restores
@@ -273,6 +297,35 @@ unit, and rolls back if the new container does not start.
 * The firmware must support `S<degF>` and `O<degF>`. Older firmware answers
   `[?] unknown command`, and the bridge logs an error.
 * Units are °F only.
+
+## Ways to get feedback (not built)
+
+The bridge cannot tell whether the Cube took a command. Outside signals
+that could help:
+
+* **Power draw.** A power-monitoring outlet separates three states. One
+  evening with a TP-Link HS110 (2026-11-11) gave under 2 W off, about 9 W on
+  and idle, and 40–150 W while the Cube drives the water temperature. It
+  shows on/off and "working", nothing more:
+  * It does not show the setpoint, or whether the Cube heats or cools. A
+    rise after a setpoint increase peaked at the same 150 W as cooling.
+    The direction depends on the water temperature, not on which way the
+    setpoint moved: the same setpoint can cool in summer and heat when the
+    room is colder.
+  * No change in power does not mean a command was lost. With a person in
+    the bed, a one-degree change may start nothing, or only make the Cube
+    work a little less hard.
+* **Display light.** The Cube's display lights up and flashes whenever the
+  setpoint changes, so a light sensor on the display is a possible simple
+  and reliable acknowledgement for every command. Not tried.
+* **Mode lights.** The Cube has lights that double as buttons, and as far
+  as Nick knows one of them lights according to what the Cube is doing. If
+  so, a sensor on those lights could give the heating or cooling state that
+  the power plug cannot. Not checked: which light shows what.
+
+The display's lighting may itself be controllable from the remote. Nick
+recalls something like that in the manual but is not sure, and no such
+command is in the captures.
 
 See the disclaimer in the root [README](../README.md#disclaimer): this project
 is not affiliated with Sleepme Inc. or Kryo Inc., and you control a mattress
