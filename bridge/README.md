@@ -280,6 +280,24 @@ unit, and rolls back if the new container does not start.
 * The firmware must support `S<degF>` and `O<degF>`. Older firmware answers
   `[?] unknown command`, and the bridge logs an error.
 * Units are °F only.
+
+## Ways to get feedback (not built)
+
+The bridge cannot tell whether the Cube took a command. Two outside signals
+could:
+
+* **Power draw.** A power-monitoring outlet separates three states. One
+  evening with a TP-Link HS110 (2026-11-11) gave under 2 W off, about 9 W on
+  and not cooling, and 90–150 W cooling. It shows on/off and cooling, not
+  the setpoint, and heating was not measured.
+* **Display light.** The Cube's display lights up and flashes whenever the
+  setpoint changes, so a light sensor on the display is a possible simple
+  and reliable acknowledgement for every command. Not tried.
+
+The display's lighting may itself be controllable from the remote. Nick
+recalls something like that in the manual but is not sure, and no such
+command is in the captures.
+
 See the disclaimer in the root [README](../README.md#disclaimer): this project
 is not affiliated with Sleepme Inc. or Kryo Inc., and you control a mattress
 appliance at your own risk.

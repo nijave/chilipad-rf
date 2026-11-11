@@ -52,7 +52,9 @@ Hypothesis or unknown:
   remote cannot show which bytes change between remotes.
 * The pairing command. No capture holds a pairing sequence, and other buttons
   were not decoded. A third command byte, `0x46`, exists (see "Radio
-  configuration"); it may be pairing or some other function.
+  configuration"); it may be pairing or some other function. A command for
+  the Cube's display lighting may exist too (recalled from the manual, not
+  checked); no capture holds one.
 * Whether the Cube needs the full 3-byte preamble and the carrier lead-in.
 * 76 °F and 77 °F after byte 259 (the last 3.5 codewords, CRC byte 2) are
   predicted from the CRC model, not captured. The sweep captured CRC byte 1 of
