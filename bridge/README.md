@@ -305,8 +305,16 @@ could:
 
 * **Power draw.** A power-monitoring outlet separates three states. One
   evening with a TP-Link HS110 (2026-11-11) gave under 2 W off, about 9 W on
-  and not cooling, and 90–150 W cooling. It shows on/off and cooling, not
-  the setpoint, and heating was not measured.
+  and idle, and 40–150 W while the Cube drives the water temperature. It
+  shows on/off and "working", nothing more:
+  * It does not show the setpoint, or whether the Cube heats or cools. A
+    rise after a setpoint increase peaked at the same 150 W as cooling.
+    The direction depends on the water temperature, not on which way the
+    setpoint moved: the same setpoint can cool in summer and heat when the
+    room is colder.
+  * No change in power does not mean a command was lost. With a person in
+    the bed, a one-degree change may start nothing, or only make the Cube
+    work a little less hard.
 * **Display light.** The Cube's display lights up and flashes whenever the
   setpoint changes, so a light sensor on the display is a possible simple
   and reliable acknowledgement for every command. Not tried.
