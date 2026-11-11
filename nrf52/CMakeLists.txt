@@ -11,3 +11,11 @@ target_sources(app PRIVATE src/main.c)
 # so this is the UTC configure time (honours SOURCE_DATE_EPOCH).
 string(TIMESTAMP CHILI_BUILD_ID "%Y%m%d-%H%MZ" UTC)
 target_compile_definitions(app PRIVATE CHILI_BUILD_ID="${CHILI_BUILD_ID}")
+
+# Device ID bytes of the remote to imitate (src/chili_encoder.h); the default
+# is 40 40.  Example: west build ... -- -DCHILI_ID0=0x41 -DCHILI_ID1=0x42
+foreach(id CHILI_ID0 CHILI_ID1)
+  if(DEFINED ${id})
+    target_compile_definitions(app PRIVATE ${id}=${${id}})
+  endif()
+endforeach()

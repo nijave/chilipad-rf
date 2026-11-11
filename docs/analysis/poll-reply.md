@@ -121,7 +121,8 @@ standard fits, and the data cannot pin down a custom polynomial.
   alternate, so b1 is no ESB-style packet ID. b1 = 1 shows up only after a press, never
   before one, in all three runs. That is weak evidence: 6 events with b1 = 1 in total.
 * Possible link to the remote's radio: the remote's burst header `80 03 80 03 5A 5A 80 03`
-  is the LT8920 default sync word. The 64 bits after the family A preamble split into
+  is the sync word `0x03805A5A03800380` that the common LT8900/LT8920 Arduino
+  drivers set (the chip's own reset value is 0). The 64 bits after the family A preamble split into
   four 16-bit words (`632F 4BBA C1BE C54D`), like the LT8920's 4×16-bit
   sync registers. One reading: T+W select one of four sync words. Treat this as a
   hypothesis only.

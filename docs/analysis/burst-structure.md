@@ -9,7 +9,9 @@ RAW (MSB-first) byte view. Scripts are in `docs/analysis/scripts/`. Run
 ## Short version
 
 A press is a small LT8920-style packet. Each 4-bit nibble of the packet goes
-on air as one of 16 fixed 64-bit codewords, 64 chips per nibble.
+on air as one of 16 fixed 64-bit codewords, 64 chips per nibble. That is the
+62.5 kbit/s mode of the remote's LT8910-class radio, not a scheme of the
+remote's own (see "Radio configuration").
 
 ```
 carrier (>=52 us of '1') | preamble 3 bytes 0x55 (24 bits)
@@ -45,9 +47,12 @@ this model.
 
 Hypothesis or unknown:
 
-* What the constant bytes `A5 44 … 40 40 00` and the header mean. They may be
-  a pairing ID, a command or a mode. Other buttons were not decoded.
-* The role of the header (preamble or sync). The receiver logic is unknown.
+* What the constant bytes `A5 … 40 40 00` mean. `40 40` is probably a device
+  ID and the last payload byte a checksum over it (see "Device ID"). One
+  remote cannot show which bytes change between remotes.
+* The pairing command. No capture holds a pairing sequence, and other buttons
+  were not decoded. A third command byte, `0x46`, exists (see "Radio
+  configuration"); it may be pairing or some other function.
 * Whether the Cube needs the full 3-byte preamble and the carrier lead-in.
 * 76 °F and 77 °F after byte 259 (the last 3.5 codewords, CRC byte 2) are
   predicted from the CRC model, not captured. The sweep captured CRC byte 1 of
@@ -231,8 +236,62 @@ A2 (see "Bit framing").
 * **LT8920 format one level up (after despreading): fits.** The layout is a
   header, a 4-bit trailer (raw `1010`), the length byte `07`, a 7-byte payload
   and a CRC-16 with poly `0x1021`, sent LSB-first, low byte first. Init is
-  `0x0000` over length + payload. Init `0x084D` gives the same result if the CRC
-  also covers the 8 header bytes.
+  `0x0000` over length + payload. Init `0x084D` over the 8 header bytes as
+  well gives the same values, but the radio's CRC initial value is `00`
+  (register 41, see "Radio configuration"), so the first reading is the
+  radio's.
+
+## Radio configuration (third-party register dump)
+
+Source: user ThrowawayUsernameRE in the r/AskElectronics thread
+[Hack ChiliPad?](https://www.reddit.com/r/AskElectronics/comments/beleuz/hack_chilipad_hacking_a_remote_controlled_rf/) (2022–2023). They sniffed the SPI bus between the
+remote's MCU and its radio, then received the remote with an ESP32 and an
+LT8920 module. Their code link is dead. What remains is their comments and a
+[screenshot](https://i.imgur.com/UasOHxM.png) of their receiver's register
+dump. This project did not sniff the SPI bus; the values below are theirs, and
+the dump is their receiver's configuration, not a readout of the remote.
+
+| Register | Value | Meaning (LT8920 datasheet) | This project's captures |
+|---|---|---|---|
+| 7 | `0030` | channel 48 = 2450 MHz | same |
+| 32 | `5800` | 3-byte preamble, 64-bit sync word, 4-bit trailer, NRZ, no FEC | same: 24 preamble bits, 8 header bytes, raw `1010` |
+| 36–39 | hidden | sync word | header `80 03 80 03 5A 5A 80 03` = `0x03805A5A03800380`, the value the common Arduino drivers set |
+| 41 | `B000` | CRC on, scrambler off, first payload byte is the length, CRC initial value `00` | same: length `07`, CRC-16/KERMIT, init 0 |
+| 44 | `1001` | high byte `10` = 62.5 kbit/s | 16 codewords of 64 chips at 1 Mchip/s = 62.5 kbit/s |
+| 45 | `0152` | the datasheet recommends `0552` below 1 Mbit/s | not observable |
+
+So the header is the radio's sync word, and the codeword table is the chip's
+62.5 kbit/s spreading. The poster identifies the remote's module as LT8910
+based. They report that a stock LT8920 does not receive it without a
+workaround, which they did not describe; registers 44 (low bit set) and 45
+differ from the datasheet's values and may be that workaround.
+
+The poster wrote that nRF24 emulation is not possible at 62.5 kbit/s. Sending
+the chips directly at 1 Mbit/s, as `nrf52/` does, works.
+
+The screenshot shows three received packets about 1 s apart, each
+`A5 46 ·· ·· ·· 00 ··` (the poster hid four bytes). In this project's layout
+`A5 CMD SP 40 40 00 X` the hidden positions are `SP 40 40` and `X`, and
+`0x46` sits where the command is: `0x44` is a setpoint press and `0x50` is
+OFF. No capture here holds `0x46`. The pairing sequence was never captured
+either, so `0x46` may be pairing, or another function.
+
+## Device ID (hypothesis)
+
+The poster says each remote has device IDs that must be read from its packets
+before the Cube accepts a transmitter. The sync word is a library example
+value, so it does not identify a remote; an ID has to be in the payload. In
+the screenshot the poster hid the bytes at the positions of `SP 40 40` and
+`X` and left `A5`, the command and `00` visible.
+
+Reading: `40 40` is the ID of the remote captured here, and `X` is a checksum,
+`X = (CMD + SP + ID0 + ID1) & 0xFF`. With `40 40` that equals the captured
+`SP-60` for `0x44` and `SP-48` for `0x50`. Which hidden bytes are the ID is
+not known; `SP` may be hidden only because it sits between them.
+
+Not tested: a second remote. The encoders take the ID as a setting
+(`CHILI_ID0`/`CHILI_ID1` in `nrf52/src/chili_encoder.h`, `--device-id` in the
+bridge) and default to `40 40`.
 
 ## Hypotheses: result
 

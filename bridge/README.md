@@ -40,7 +40,7 @@ Options (environment variable in brackets): `--port` (`CHILIPAD_PORT`),
 (`CHILIPAD_MQTT_PASSWORD`), `--name` ("ChiliPad Cube"), `--unique-id`
 (`chilipad_cube`), `--units F`, `--min 55`, `--max 93`,
 `--default-setpoint` (`CHILIPAD_DEFAULT_SETPOINT`, 72), `--no-sniff`,
-`--log-level`. Give the password through the environment: a command-line
+`--device-id` (`CHILIPAD_DEVICE_ID`, 4040), `--log-level`. Give the password through the environment: a command-line
 value is visible in `ps`. The bridge never logs it.
 
 The Cube sends no feedback, so the bridge only knows a setpoint it sent,

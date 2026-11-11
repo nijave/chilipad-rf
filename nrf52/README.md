@@ -2,9 +2,9 @@
 
 Second receiver next to the ESP8266 + nRF24L01+ promiscuous sniffer in
 `../esp8266/src/main.cpp`. It turns a Nordic **nRF52840 Dongle (PCA10059)** into a raw
-2.4 GHz receiver for the proprietary LT8920-based remote (1 Mchip/s GFSK,
-where each 4-bit nibble is one of 16 64-chip codewords, i.e. 62.5 kbit/s of
-data; 2450 MHz) using nothing but the `NRF_RADIO` peripheral: no Bluetooth stack, no
+2.4 GHz receiver for the remote's LT8910-class radio in its 62.5 kbit/s mode
+(1 Mchip/s GFSK, where each 4-bit nibble is one of 16 64-chip codewords;
+2450 MHz) using nothing but the `NRF_RADIO` peripheral: no Bluetooth stack, no
 ESB library, no SoftDevice. It talks to the laptop over the dongle's USB CDC ACM
 serial port with the same line-based command style and the same `P <t> ... RAW
 <hex> | REV <hex>` packet format the ESP firmware uses, so the existing GUI can
@@ -346,11 +346,15 @@ If a burst times out, the last line is `[S] 74 FAILED (<k> of <n> sent)`.
 How it works:
 
 1. `src/chili_encoder.h` encodes the packet
-   `07 A5 CMD SP 40 40 00 X` + CRC-16/KERMIT (low byte first), behind the
-   header `80 03 80 03 5A 5A 80 03`. `X = (CMD + SP - 0x80) & 0xFF`.
-   `S` uses `CMD = 0x44` (`X = SP-60`); `O` uses `CMD = 0x50` (power OFF,
-   for example `07 A5 50 48 40 40 00 18` at 72 °F). Power ON is a normal
-   `0x44` press. Each nibble (low nibble first) becomes its
+   `07 A5 CMD SP ID0 ID1 00 X` + CRC-16/KERMIT (low byte first), behind the
+   sync word `80 03 80 03 5A 5A 80 03`. `X = (CMD + SP + ID0 + ID1) & 0xFF`.
+   `ID0 ID1` is `40 40`, the value of the one remote captured. It is probably
+   a per-remote device ID; for another remote, build with
+   `-- -DCHILI_ID0=0x.. -DCHILI_ID1=0x..` (see
+   `docs/analysis/burst-structure.md`, "Device ID").
+   `S` uses `CMD = 0x44` (`X = SP-60` with ID `40 40`); `O` uses `CMD = 0x50`
+   (power OFF, for example `07 A5 50 48 40 40 00 18` at 72 °F). Power ON is a
+   normal `0x44` press. Each nibble (low nibble first) becomes its
    64-bit codeword. This is a C port of `encode()` in
    `docs/analysis/scripts/decode.py` (see `docs/analysis/burst-structure.md`).
 2. It splits the 2320-bit stream into two equal 154-byte nRF52 packets, as
@@ -383,7 +387,8 @@ It compiles `tools/encoder_check.c` against `src/chili_encoder.h` and compares
 its output for every setpoint from 55 to 93 with `gen_burst2.py` (`set`) and
 with `tools/gen_burst2_cmd.py` for command `0x44` (`set-cmd`) and `0x50`
 (`off`). `gen_burst2_cmd.py` is `gen_burst2.py` with the command byte
-patched in. Each line says `OK` or `MISMATCH`.
+patched in. A second build with the device ID `12 34` is compared the same
+way (`id-set`, `id-off`). Each line says `OK` or `MISMATCH`.
 
 On the dongle, compare `T<degF>` with the Python output for the same
 setpoint:
