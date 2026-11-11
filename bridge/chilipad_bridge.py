@@ -290,8 +290,8 @@ def parse_tx_line(line: str) -> tuple[int, int, int] | None:
     return (int(m[1]), int(m[2]), int(m[3])) if m else None
 
 
-def tx_ok(res: tuple[int, int, int] | None) -> bool:
-    return res is not None and res[0] >= 1 and res[2] == 0
+def tx_ok(res: tuple[int, int, int] | None, repeat: int = 1) -> bool:
+    return res is not None and res[0] >= repeat and res[2] == 0
 
 
 def parse_setpoint(payload: str, lo: int, hi: int) -> int | None:
@@ -500,12 +500,29 @@ TX_OR_ERR = re.compile(
 RX_CONFIG = ["c50", "mb1", "l64", f"w{TRIGGER}"]
 
 
+REPEAT_DEFAULT = 3  # bursts per press; the dongle spaces them 100 ms apart
+REPEAT_MAX = 10  # the firmware's limit for S<n>,<k> / O<n>,<k>
+
+
+def press_command(letter: str, n: int, repeat: int = REPEAT_DEFAULT) -> str:
+    """Dongle command for a press: `S72,3` sends the burst three times."""
+    return f"{letter}{n},{repeat}" if repeat > 1 else f"{letter}{n}"
+
+
 def send_press(
-    dongle: Dongle, letter: str, n: int, attempts: int = 2, timeout: float = 3.0
+    dongle: Dongle,
+    letter: str,
+    n: int,
+    repeat: int = REPEAT_DEFAULT,
+    attempts: int = 2,
+    timeout: float = 3.0,
 ) -> bool:
-    """Send `S<n>` (setpoint / power on) or `O<n>` (power off) and wait for a
-    clean `[tx]` line; retry once. The caller handles capture."""
-    cmd = f"{letter}{n}"
+    """Send `S<n>` (setpoint / power on) or `O<n>` (power off) `repeat` times
+    and wait for a clean `[tx]` line; retry once. The Cube sends no
+    acknowledgement and the remote's presses are absolute values, so a
+    repeated burst costs nothing and covers a lost one. The caller handles
+    capture."""
+    cmd = press_command(letter, n, repeat)
     for attempt in range(1, attempts + 1):
         try:
             m = dongle.command(cmd, TX_OR_ERR, timeout)
@@ -521,7 +538,7 @@ def send_press(
             log.error("%s: dongle refused the command: %s", cmd, m[0])
             return False
         res = parse_tx_line(m[0])
-        if tx_ok(res):
+        if tx_ok(res, repeat):
             log.info("%s sent: %s", cmd, m[0])
             return True
         log.warning("%s: transmit incomplete: %s (attempt %d)", cmd, m[0], attempt)
@@ -644,7 +661,7 @@ class Bridge:
             if self.args.sniff and not self.dongle.set_capture(False):
                 log.warning("could not stop capture before transmit")
             self.assembler.flush(force=True)
-            ok = send_press(self.dongle, letter, n)
+            ok = send_press(self.dongle, letter, n, self.args.repeat)
         except OSError as e:
             log.error("transmit failed: %s", e)
         finally:
@@ -915,7 +932,7 @@ def run_once(args, n: int) -> int:
         was = dongle.query_capture()
         if was:
             dongle.set_capture(False)
-        ok = send_press(dongle, letter, n)
+        ok = send_press(dongle, letter, n, args.repeat)
         if was:
             dongle.set_capture(True)
         print(f"{letter}{n}: {'ok' if ok else 'FAILED'}")
@@ -962,6 +979,13 @@ def selftest(fixture_root: Path) -> int:
     check(w is not None and w.dt == 2959261 and w.raw == "D019F2E6", "P line")
     check(tx_ok(parse_tx_line("[tx] sent=1 segs=2 timeouts=0")), "[tx] ok")
     check(not tx_ok(parse_tx_line("[tx] sent=0 segs=1 timeouts=1")), "[tx] timeout")
+    check(press_command("S", 72) == "S72,3", "press sends 3 bursts by default")
+    check(press_command("O", 72, 1) == "O72", "repeat 1 sends the bare command")
+    check(tx_ok(parse_tx_line("[tx] sent=3 segs=6 timeouts=0"), 3), "[tx] 3 of 3")
+    check(
+        not tx_ok(parse_tx_line("[tx] sent=2 segs=4 timeouts=0"), 3),
+        "[tx] 2 of 3 is incomplete",
+    )
     check(parse_setpoint("72.0", 55, 93) == 72, "setpoint '72.0'")
     check(parse_setpoint("100", 55, 93) == 93, "setpoint clamp high")
     check(parse_setpoint("abc", 55, 93) is None, "setpoint invalid")
@@ -1089,6 +1113,13 @@ def parse_args(argv=None):
         help="do not capture remote presses",
     )
     p.add_argument(
+        "--repeat",
+        type=int,
+        default=int(env("REPEAT", str(REPEAT_DEFAULT))),
+        metavar="N",
+        help=f"bursts per press, 1..{REPEAT_MAX} (default: %(default)s)",
+    )
+    p.add_argument(
         "--device-id",
         default=env("DEVICE_ID", DEVICE_ID.hex()),
         metavar="HEX",
@@ -1132,6 +1163,8 @@ def parse_args(argv=None):
         p.error("--mqtt-host (or CHILIPAD_MQTT_HOST) is required")
     if not re.fullmatch(r"[A-Za-z0-9_-]+", a.unique_id):
         p.error("--unique-id may contain only letters, digits, '_' and '-'")
+    if not 1 <= a.repeat <= REPEAT_MAX:
+        p.error(f"--repeat must be within 1..{REPEAT_MAX}")
     if not re.fullmatch(r"[0-9A-Fa-f]{4}", a.device_id):
         p.error("--device-id must be 4 hex digits, for example 4040")
     return a

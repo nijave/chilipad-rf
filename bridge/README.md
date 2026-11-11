@@ -15,7 +15,13 @@ What it does:
   `c50 mb1 l64 w9388B0CA` + `p`. The bridge decodes each remote press
   (setpoint or off) and publishes it, so Home Assistant follows manual
   changes. The bridge stops capture before each send and starts it again after.
-* The bridge waits up to 3 s for `[tx] sent=1 ... timeouts=0` and retries
+* Each press goes out three times, 100 ms apart (`S72,3`; `--repeat`). The
+  Cube sends no acknowledgement, and a single burst can be lost: on
+  2026-11-11 the dongle logged 13 single-burst setpoint changes as sent and
+  the Cube missed at least one of them. A press carries an absolute
+  setpoint, so the repeats change nothing when the first one arrives. The
+  remote itself sends one burst per press.
+* The bridge waits up to 3 s for `[tx] sent=3 ... timeouts=0` and retries
   once. If the send fails, it publishes the previous state again.
 
 ## Install and run
@@ -40,7 +46,8 @@ Options (environment variable in brackets): `--port` (`CHILIPAD_PORT`),
 (`CHILIPAD_MQTT_PASSWORD`), `--name` ("ChiliPad Cube"), `--unique-id`
 (`chilipad_cube`), `--units F`, `--min 55`, `--max 93`,
 `--default-setpoint` (`CHILIPAD_DEFAULT_SETPOINT`, 72), `--no-sniff`,
-`--device-id` (`CHILIPAD_DEVICE_ID`, 4040), `--log-level`. Give the password through the environment: a command-line
+`--repeat` (`CHILIPAD_REPEAT`, 3), `--device-id` (`CHILIPAD_DEVICE_ID`,
+4040), `--log-level`. Give the password through the environment: a command-line
 value is visible in `ps`. The bridge never logs it.
 
 The Cube sends no feedback, so the bridge only knows a setpoint it sent,
@@ -255,8 +262,8 @@ unit, and rolls back if the new container does not start.
 ## Limits
 
 * The Cube sends no feedback. The state is the last value the bridge sent or
-  sniffed. If a burst does not reach the Cube, Home Assistant still shows the
-  new value. Changes made on the Cube's own buttons are not seen. HackRF
+  sniffed. If no burst of a press reaches the Cube, Home Assistant still
+  shows the new value. Changes made on the Cube's own buttons are not seen. HackRF
   captures and the FCC filings confirm that the Cube only receives
   (`../docs/analysis/poll-reply.md` section 7).
 * After a power cut the Cube starts in the off state, but the bridge restores
@@ -273,7 +280,6 @@ unit, and rolls back if the new container does not start.
 * The firmware must support `S<degF>` and `O<degF>`. Older firmware answers
   `[?] unknown command`, and the bridge logs an error.
 * Units are °F only.
-
 See the disclaimer in the root [README](../README.md#disclaimer): this project
 is not affiliated with Sleepme Inc. or Kryo Inc., and you control a mattress
 appliance at your own risk.
