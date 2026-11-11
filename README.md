@@ -21,6 +21,22 @@ sections 6–7.
 * Optional: an ESP8266 with an nRF24L01+ as the original sniffer
   (`esp8266/`), and a HackRF for IQ analysis (`docs/analysis/hackrf-plan.md`).
 
+## FCC filings
+
+The Cube's radio is not a mystery: the FCC certification exhibits for both
+generations are public. They place the remote's band and identify the
+transceiver, which is why this project targets 2.4 GHz while older write-ups
+chase 433 MHz.
+
+| FCC ID | Grantee | Year | Band | Notes |
+|--------|---------|------|------|-------|
+| [`2AUPC-CP-CUBE`](https://fcc.report/FCC-ID/2AUPC-CP-CUBE) | Kryo Inc. | 2019 | 2450 MHz | Current Cube. [Internal photos of the remote](https://fcc.report/FCC-ID/2AUPC-CP-CUBE/4506776) show an off-the-shelf LT8910-class 2.4 GHz module, matching the protocol decoded here. |
+| [`2ABA9-CP-CUBE-02`](https://fccid.io/2ABA9-CP-CUBE-02) | Chili Technology LLC | 2014 | 433.92 MHz | Earlier remote. Block diagram, schematic and internal photos are public. |
+| [`VNT-CHILIPAD`](https://fccid.io/VNT-CHILIPAD) | T2 Products LLC | 2007 | — | Original ChiliPad remote. |
+
+If your remote matches the 433.92 MHz filing rather than the 2.4 GHz one, this
+project does not cover it.
+
 ## Quick start
 
 1. Flash the dongle: [`nrf52/README.md`](nrf52/README.md).
