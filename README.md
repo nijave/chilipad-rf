@@ -44,6 +44,37 @@ cd docs/analysis/scripts && uv run --locked --project .. python -m unittest test
 cd bridge && uv run --locked chilipad_bridge.py --selftest
 ```
 
+## Prior art and related work
+
+The remote has been asked about in public for years, but no working RF
+implementation predates this one. The threads below are useful for context and
+for the failure modes they document.
+
+* [Hack ChiliPad? Hacking a remote controlled RF device](https://www.reddit.com/r/AskElectronics/comments/beleuz/hack_chilipad_hacking_a_remote_controlled_rf/)
+  (r/AskElectronics, 2019, still active) — the original ask. Includes a pointer
+  to the remote's FCC internal photos and a claim of working sniff/send code
+  that was never published.
+* [Need help finding an elusive remote signal](https://www.reddit.com/r/RTLSDR/comments/f4hk4p/need_help_finding_an_elusive_remote_signal/)
+  (r/RTLSDR, 2020) — a HackRF attempt at the 433.92 MHz the FCC filing states,
+  which never locked onto the signal; the 2.4 GHz follow-up guess was correct
+  for the newer Cube (see [FCC filings](#fcc-filings)).
+* [Reverse-Engineering the MiLight on-air protocol](https://hackaday.io/project/5888-reverse-engineering-the-milight-on-air-protocol)
+  (Hackaday.io) — same 2.4 GHz proprietary-transceiver family, decoded at the
+  SPI side of the radio rather than over the air.
+* [Reverse Engineering a Quadcopter RC](https://mmelchior.wordpress.com/2016/06/06/qc-360-a1-p1/)
+  (Michael Melchior) — the canonical walk-through of promiscuous-mode nRF24L01+
+  sniffing, the technique this project's ESP8266 sniffer builds on.
+* [RF Remote Reverse Engineering](http://dlaw.me/rf-remote-reverse-engineering/)
+  (dlaw.me) — a HackRF IQ → FSK → bits decode of a 2.4 GHz remote; the closest
+  methodology match to `docs/analysis/hackrf-plan.md`.
+* [chili_cookoff](https://github.com/runnedrun/chili_cookoff) — an unrelated
+  2013 approach that drives servos onto the remote's buttons instead of
+  transmitting; included to show the mechanical alternative.
+
+For the BLE Ooler (a different transport with the same goal), see
+[PostLogical/ooler](https://github.com/PostLogical/ooler) and
+[turmoni/ooler-mqtt-bridge](https://github.com/turmoni/ooler-mqtt-bridge).
+
 ## Acknowledgements
 
 Travis Goodspeed's promiscuous-mode technique for the nRF24L01+
