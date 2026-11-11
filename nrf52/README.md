@@ -2,9 +2,9 @@
 
 Second receiver next to the ESP8266 + nRF24L01+ promiscuous sniffer in
 `../esp8266/src/main.cpp`. It turns a Nordic **nRF52840 Dongle (PCA10059)** into a raw
-2.4 GHz receiver for the proprietary LT8920-based remote (1 Mchip/s GFSK,
-where each 4-bit nibble is one of 16 64-chip codewords, i.e. 62.5 kbit/s of
-data; 2450 MHz) using nothing but the `NRF_RADIO` peripheral: no Bluetooth stack, no
+2.4 GHz receiver for the remote's LT8910-class radio in its 62.5 kbit/s mode
+(1 Mchip/s GFSK, where each 4-bit nibble is one of 16 64-chip codewords;
+2450 MHz) using nothing but the `NRF_RADIO` peripheral: no Bluetooth stack, no
 ESB library, no SoftDevice. It talks to the laptop over the dongle's USB CDC ACM
 serial port with the same line-based command style and the same `P <t> ... RAW
 <hex> | REV <hex>` packet format the ESP firmware uses, so the existing GUI can

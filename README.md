@@ -67,9 +67,11 @@ implementation predates this one. The threads below are useful for context and
 for the failure modes they document.
 
 * [Hack ChiliPad? Hacking a remote controlled RF device](https://www.reddit.com/r/AskElectronics/comments/beleuz/hack_chilipad_hacking_a_remote_controlled_rf/)
-  (r/AskElectronics, 2019, still active) — the original ask. Includes a pointer
-  to the remote's FCC internal photos and a claim of working sniff/send code
-  that was never published.
+  (r/AskElectronics, 2019, still active) — the original ask. A later poster
+  sniffed the remote's SPI bus and shared ESP32 + LT8920 sniff/send code; the
+  link is dead, but their comments and a register-dump screenshot remain.
+  `docs/analysis/burst-structure.md` ("Radio configuration") compares that dump
+  with this project's captures.
 * [Need help finding an elusive remote signal](https://www.reddit.com/r/RTLSDR/comments/f4hk4p/need_help_finding_an_elusive_remote_signal/)
   (r/RTLSDR, 2020) — a HackRF attempt at the 433.92 MHz the FCC filing states,
   which never locked onto the signal; the 2.4 GHz follow-up guess was correct

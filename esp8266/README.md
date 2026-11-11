@@ -9,11 +9,12 @@ dongle's transmissions.
 
 ## Target signal
 
-The remote sends 1 Mchip/s GFSK on 2450 MHz (nRF24 channel 50). The transmitter
-spreads its data with a chip code: each 4-bit nibble of the message becomes one
-of 16 64-chip codewords, so a press carries 62.5 kbit/s of data over the air.
-The generic "payload | CRC16" frame description in the LT8920 datasheet
-describes that chip's normal mode, not what this remote sends. For the
+The remote sends 1 Mchip/s GFSK on 2450 MHz (nRF24 channel 50). Its radio
+runs in the LT8910/LT8920 62.5 kbit/s mode (register 44 = `10xx`), which
+spreads the data with a chip code: each 4-bit nibble of the message becomes one
+of 16 64-chip codewords. The "payload | CRC16" frame in the LT8920 datasheet
+is what the remote sends before that spreading, so an nRF24 at 1 Mbit/s sees
+chips, not packet bytes. For the
 remote's real burst structure (codewords, the 64-bit sync word, the CRC), see
 `../docs/analysis/burst-structure.md`.
 
