@@ -14,15 +14,32 @@ What it does:
 * Sniff mode (on by default) keeps the dongle receiving with
   `c50 mb1 l64 w9388B0CA` + `p`. The bridge decodes each remote press
   (setpoint or off) and publishes it, so Home Assistant follows manual
-  changes. The bridge stops capture before each send and starts it again after.
-* Each press goes out three times, 100 ms apart (`S72,3`; `--repeat`). The
-  Cube sends no acknowledgement, and a single burst can be lost: on
-  2026-11-11 the dongle logged 13 single-burst setpoint changes as sent and
-  the Cube missed at least one of them. A press carries an absolute
-  setpoint, so the repeats change nothing when the first one arrives. The
-  remote itself sends one burst per press.
-* The bridge waits up to 3 s for `[tx] sent=3 ... timeouts=0` and retries
-  once. If the send fails, it publishes the previous state again.
+  changes. The bridge stops capture before each press and starts it again
+  after the press's last burst.
+* Each press goes out three times (`--repeat`): the bridge sends three
+  single-burst commands (`S72`, `S72`, `S72`). The Cube sends no
+  acknowledgement, and a single burst can be lost: on 2026-11-11 the dongle
+  logged 13 single-burst setpoint changes as sent and the Cube missed at
+  least one of them. A press carries an absolute setpoint, so the repeats
+  change nothing when the first one arrives. The remote itself sends one
+  burst per press.
+* The bursts are 100 ms ± 25 ms apart, start to start, with each gap drawn
+  at random. The bridge times each gap from when it wrote the previous
+  command, not from the dongle's reply (20–50 ms later); if a reply is
+  slower than the gap, the next command goes out at once. The bridge does
+  not use the firmware's `S72,3`, whose bursts are exactly 100 ms apart. A
+  HackRF capture at the bed on the evening of 2026-11-11 showed a 2.6 ms
+  transmission every 102.4 ms on 2450–2452 MHz (a Wi-Fi beacon interval).
+  A fixed 100 ms spacing moves each repeat only 0.4 ms against such a
+  beacon, so if the first burst (also about 2.6 ms) collides, the repeats
+  can collide too. Whether the beacon caused the missed command is not
+  known.
+* For each burst the bridge waits up to 3 s for `[tx] sent=1 ... timeouts=0`
+  and retries once. It logs one line per press with the gaps it used. If no
+  burst is confirmed, it publishes the previous state again. If a burst
+  fails after an earlier one was confirmed, the bridge stops the group, logs
+  a warning and keeps the new state, because the Cube may already have
+  acted.
 
 ## Install and run
 

@@ -23,10 +23,12 @@ from __future__ import annotations
 
 import argparse
 import collections
+import itertools
 import json
 import logging
 import os
 import queue
+import random
 import re
 import signal
 import sys
@@ -290,8 +292,8 @@ def parse_tx_line(line: str) -> tuple[int, int, int] | None:
     return (int(m[1]), int(m[2]), int(m[3])) if m else None
 
 
-def tx_ok(res: tuple[int, int, int] | None, repeat: int = 1) -> bool:
-    return res is not None and res[0] >= repeat and res[2] == 0
+def tx_ok(res: tuple[int, int, int] | None) -> bool:
+    return res is not None and res[0] >= 1 and res[2] == 0
 
 
 def parse_setpoint(payload: str, lo: int, hi: int) -> int | None:
@@ -500,35 +502,39 @@ TX_OR_ERR = re.compile(
 RX_CONFIG = ["c50", "mb1", "l64", f"w{TRIGGER}"]
 
 
-REPEAT_DEFAULT = 3  # bursts per press; the dongle spaces them 100 ms apart
-REPEAT_MAX = 10  # the firmware's limit for S<n>,<k> / O<n>,<k>
+REPEAT_DEFAULT = 3  # bursts per press
+REPEAT_MAX = 10
+# Start-to-start spacing of the bursts in one press: each gap is drawn
+# uniformly from REPEAT_GAP_S +- REPEAT_JITTER_S. A fixed 100 ms spacing
+# drifts only 0.4 ms per repeat against a 102.4 ms Wi-Fi beacon, so a burst
+# that hit one beacon could hit the next one too.
+REPEAT_GAP_S = 0.100
+REPEAT_JITTER_S = 0.025
 
 
-def press_command(letter: str, n: int, repeat: int = REPEAT_DEFAULT) -> str:
-    """Dongle command for a press: `S72,3` sends the burst three times."""
-    return f"{letter}{n},{repeat}" if repeat > 1 else f"{letter}{n}"
+def repeat_gaps(repeat: int, rand=random.uniform) -> list[float]:
+    """`repeat - 1` independent gaps in seconds, start to start."""
+    lo, hi = REPEAT_GAP_S - REPEAT_JITTER_S, REPEAT_GAP_S + REPEAT_JITTER_S
+    return [rand(lo, hi) for _ in range(repeat - 1)]
 
 
-def send_press(
+def send_burst(
     dongle: Dongle,
-    letter: str,
-    n: int,
-    repeat: int = REPEAT_DEFAULT,
+    cmd: str,
     attempts: int = 2,
     timeout: float = 3.0,
-) -> bool:
-    """Send `S<n>` (setpoint / power on) or `O<n>` (power off) `repeat` times
-    and wait for a clean `[tx]` line; retry once. The Cube sends no
-    acknowledgement and the remote's presses are absolute values, so a
-    repeated burst costs nothing and covers a lost one. The caller handles
-    capture."""
-    cmd = press_command(letter, n, repeat)
+    clock=time.monotonic,
+) -> tuple[bool, float]:
+    """Send one single-burst command and wait for a clean `[tx]` line; retry
+    once. Returns (confirmed, time the last attempt was written)."""
+    started = clock()
     for attempt in range(1, attempts + 1):
+        started = clock()
         try:
             m = dongle.command(cmd, TX_OR_ERR, timeout)
         except OSError as e:
             log.error("send %s failed: %s", cmd, e)
-            return False
+            return False, started
         if m is None:
             log.warning(
                 "%s: no [tx] reply within %.0f s (attempt %d)", cmd, timeout, attempt
@@ -536,13 +542,65 @@ def send_press(
             continue
         if UNKNOWN_LINE.match(m[0]):
             log.error("%s: dongle refused the command: %s", cmd, m[0])
-            return False
-        res = parse_tx_line(m[0])
-        if tx_ok(res, repeat):
-            log.info("%s sent: %s", cmd, m[0])
-            return True
+            return False, started
+        if tx_ok(parse_tx_line(m[0])):
+            log.debug("%s sent: %s", cmd, m[0])
+            return True, started
         log.warning("%s: transmit incomplete: %s (attempt %d)", cmd, m[0], attempt)
-    return False
+    return False, started
+
+
+def send_press(
+    dongle: Dongle,
+    letter: str,
+    n: int,
+    repeat: int = REPEAT_DEFAULT,
+    *,
+    rand=random.uniform,
+    sleep=time.sleep,
+    clock=time.monotonic,
+) -> bool:
+    """Send `S<n>` (setpoint / power on) or `O<n>` (power off) as `repeat`
+    single-burst commands. The Cube sends no acknowledgement and a press
+    carries an absolute value, so a repeated burst costs nothing and covers a
+    lost one. The caller handles capture.
+
+    The gaps are start to start: each burst is scheduled from the time the
+    previous command was written, not from its `[tx]` reply (which takes
+    20-50 ms), and a slow reply shortens the next wait, never below zero.
+
+    Returns True if at least one burst was confirmed. A later failure after
+    a confirmed burst only logs a warning: the Cube may already have acted, so
+    Home Assistant keeps the new state. The group stops at the first burst
+    that fails after its retry."""
+    cmd = f"{letter}{n}"
+    gaps = repeat_gaps(repeat, rand)
+    sent, used, last = 0, [], None
+    for i in range(repeat):
+        if last is not None:
+            wait = last + gaps[i - 1] - clock()
+            if wait > 0:
+                sleep(wait)
+        ok, started = send_burst(dongle, cmd, clock=clock)
+        if last is not None:
+            used.append(started - last)
+        last = started
+        if not ok:
+            break
+        sent += 1
+    gap_txt = ", ".join(f"{g * 1000:.0f}" for g in used)
+    detail = f" (gaps {gap_txt} ms start to start)" if used else ""
+    if sent == repeat:
+        log.info("%s sent: %d of %d bursts%s", cmd, sent, repeat, detail)
+    elif sent:
+        log.warning(
+            "%s: only %d of %d bursts confirmed%s; counting the press as sent",
+            cmd,
+            sent,
+            repeat,
+            detail,
+        )
+    return sent > 0
 
 
 # ---------------------------------------------------------------------------
@@ -979,13 +1037,6 @@ def selftest(fixture_root: Path) -> int:
     check(w is not None and w.dt == 2959261 and w.raw == "D019F2E6", "P line")
     check(tx_ok(parse_tx_line("[tx] sent=1 segs=2 timeouts=0")), "[tx] ok")
     check(not tx_ok(parse_tx_line("[tx] sent=0 segs=1 timeouts=1")), "[tx] timeout")
-    check(press_command("S", 72) == "S72,3", "press sends 3 bursts by default")
-    check(press_command("O", 72, 1) == "O72", "repeat 1 sends the bare command")
-    check(tx_ok(parse_tx_line("[tx] sent=3 segs=6 timeouts=0"), 3), "[tx] 3 of 3")
-    check(
-        not tx_ok(parse_tx_line("[tx] sent=2 segs=4 timeouts=0"), 3),
-        "[tx] 2 of 3 is incomplete",
-    )
     check(parse_setpoint("72.0", 55, 93) == 72, "setpoint '72.0'")
     check(parse_setpoint("100", 55, 93) == 93, "setpoint clamp high")
     check(parse_setpoint("abc", 55, 93) is None, "setpoint invalid")
@@ -993,6 +1044,86 @@ def selftest(fixture_root: Path) -> int:
         is_esp_port("/dev/ttyUSB0") and not is_esp_port("/dev/ttyACM1"),
         "ESP port filter",
     )
+
+    print("repeated press (fake dongle and clock, no hardware)")
+    ok_line = "[tx] sent=1 segs=2 timeouts=0"
+
+    class FakeDongle:
+        """Answers each command with the next scripted line (None = no reply)
+        after `latency` seconds of fake time."""
+
+        def __init__(self, replies, latency=0.03):
+            self.now, self.cmds, self.starts = 0.0, [], []
+            self.replies, self.latency = list(replies), latency
+
+        def clock(self) -> float:
+            return self.now
+
+        def sleep(self, s: float) -> None:
+            assert s > 0, s
+            self.now += s
+
+        def command(self, cmd, pattern, timeout):
+            self.cmds.append(cmd)
+            self.starts.append(self.now)
+            line = self.replies.pop(0) if self.replies else ok_line
+            self.now += self.latency if line is not None else timeout
+            return None if line is None else pattern.match(line)
+
+    def press(fake, repeat, letter="S", seed=1):
+        rng = random.Random(seed)
+        return send_press(
+            fake,
+            letter,
+            72,
+            repeat,
+            rand=rng.uniform,
+            sleep=fake.sleep,
+            clock=fake.clock,
+        )
+
+    fake = FakeDongle([])
+    ok = press(fake, REPEAT_DEFAULT)
+    gaps = [b - a for a, b in itertools.pairwise(fake.starts)]
+    check(ok and fake.cmds == ["S72"] * 3, f"3 single-burst commands {fake.cmds}")
+    lo, hi = REPEAT_GAP_S - REPEAT_JITTER_S, REPEAT_GAP_S + REPEAT_JITTER_S
+    check(
+        all(lo <= g <= hi for g in gaps),
+        f"gaps {[round(g * 1000, 1) for g in gaps]} ms within 75..125 ms",
+    )
+    many = repeat_gaps(REPEAT_MAX, random.Random(2).uniform)
+    check(
+        len(many) == REPEAT_MAX - 1
+        and all(lo <= g <= hi for g in many)
+        and len(set(many)) > 1,
+        "gaps drawn independently, not all identical",
+    )
+    fake = FakeDongle([], latency=0.2)
+    press(fake, 3)
+    gaps = [b - a for a, b in itertools.pairwise(fake.starts)]
+    check(
+        all(abs(g - 0.2) < 1e-9 for g in gaps),
+        "slow reply: next burst right after it, no negative sleep",
+    )
+    fake = FakeDongle([])
+    ok = press(fake, 1, "O")
+    check(
+        ok and fake.cmds == ["O72"] and fake.now == fake.latency,
+        "--repeat 1: one bare command, no sleep",
+    )
+    fake = FakeDongle([None, ok_line])
+    ok = press(fake, 1)
+    check(ok and fake.cmds == ["S72", "S72"], "no reply: burst retried once")
+    fake = FakeDongle([ok_line, None, None])
+    ok = press(fake, 3)
+    check(
+        ok and fake.cmds == ["S72"] * 3,
+        "1 of 3 confirmed, then a failure: press counts as sent, group stops",
+    )
+    fake = FakeDongle([None, None])
+    check(not press(fake, 3) and len(fake.cmds) == 2, "no burst confirmed: failure")
+    fake = FakeDongle(["[?] unknown command"])
+    check(not press(fake, 3) and len(fake.cmds) == 1, "refused: failure, no retry")
 
     dec = PressDecoder()
     fixtures = [
