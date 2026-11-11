@@ -7,3 +7,6 @@ __pycache__/
 build/
 *.jsonl
 bridge/chilipad-bridge.env
+
+# Git worktrees
+.worktrees/
