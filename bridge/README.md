@@ -300,8 +300,8 @@ unit, and rolls back if the new container does not start.
 
 ## Ways to get feedback (not built)
 
-The bridge cannot tell whether the Cube took a command. Two outside signals
-could:
+The bridge cannot tell whether the Cube took a command. Outside signals
+that could help:
 
 * **Power draw.** A power-monitoring outlet separates three states. One
   evening with a TP-Link HS110 (2026-11-11) gave under 2 W off, about 9 W on
@@ -318,6 +318,10 @@ could:
 * **Display light.** The Cube's display lights up and flashes whenever the
   setpoint changes, so a light sensor on the display is a possible simple
   and reliable acknowledgement for every command. Not tried.
+* **Mode lights.** The Cube has lights that double as buttons, and as far
+  as Nick knows one of them lights according to what the Cube is doing. If
+  so, a sensor on those lights could give the heating or cooling state that
+  the power plug cannot. Not checked: which light shows what.
 
 The display's lighting may itself be controllable from the remote. Nick
 recalls something like that in the manual but is not sure, and no such
