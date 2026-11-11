@@ -37,14 +37,27 @@ bootloader expects. Use that target, not the `.../bare` variant.
 
 ### Raytac MDBT50Q-CX dongle
 
-The Raytac MDBT50Q-CX-40 dongle ships the same Nordic open bootloader, so the
-DFU steps below work unchanged. Build it with
-`-b raytac_mdbt50q_cx_40_dongle/nrf52840`, **not** the PCA10059 target. The
-PCA10059 board config enables the DC/DC regulator and the Nordic dongle has
-the inductors for it; the Raytac module has none and runs in LDO mode. A
-PCA10059 image programs fine ("Device programmed") and then stays silent:
-no LED, no USB, no error. The dongle survives this; press RESET and the
-bootloader comes back. (From a product review, 2026-11; not yet tried here.)
+The Raytac MDBT50Q-CX-40 dongle (USB-C) ships the Nordic open bootloader
+too, so the `nrfutil` package and DFU commands below work unchanged. Build it
+with `-b raytac_mdbt50q_cx_40_dongle/nrf52840`, **not** the PCA10059 target.
+The PCA10059 board config enables the DC/DC regulator and the Nordic dongle
+has the inductors for it; the Raytac module has none and runs in LDO mode
+(check `regulator-initial-mode` of `reg1` in `build/.../zephyr/zephyr.dts`:
+`0` on the Raytac target, `1` on the PCA10059 target). Both targets link at
+0x1000. A PCA10059 image programs fine ("Device programmed") and then stays
+silent: no LED, no USB, no error. The dongle survives this; enter the
+bootloader again and flash the right image. (From a product review, 2026-11.)
+
+Out of the box the Raytac dongle runs Nordic's `usbd_ble_uart` demo, not the
+bootloader. It enumerates as `1915:521a` "Nordic Semiconductor nRF52 USB CDC
+BLE Demo", the USB serial number is its BLE address (12 hex digits), and it
+advertises as `MDBT50Q-CX-40` with the Nordic UART Service. This demo has no
+software way into DFU. To start the bootloader, hold the button (SW1, at the
+end away from the USB connector; push it towards the connector) while you
+plug the dongle in. The LED fades in and out and the port is `1915:521f`.
+After the flash, the by-id name changes to
+`usb-chilipad-rf_chilipad-sniffer_<serial>-if00`, with a new 16-digit
+serial, so read it again before you configure the bridge.
 
 ## Flash over the Nordic open USB DFU bootloader
 
