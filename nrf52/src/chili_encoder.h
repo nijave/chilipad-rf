@@ -15,9 +15,12 @@
  *   "1" (last preamble bit)
  *   16 codewords: nibbles of 80 03 80 03 5A 5A 80 03, low nibble first
  *   "1010" (TRAILER)
- *   20 codewords: nibbles of 07 A5 CMD SP 40 40 00 X CRCL CRCH,
- *     X = (CMD + SP - 0x80) & 0xFF.  CMD 0x44 = set temperature (X = SP-60,
- *     also power ON), CMD 0x50 = power OFF (SP = the current setpoint).
+ *   20 codewords: nibbles of 07 A5 CMD SP ID0 ID1 00 X CRCL CRCH,
+ *     X = (CMD + SP + ID0 + ID1) & 0xFF.  CMD 0x44 = set temperature (also
+ *     power ON), CMD 0x50 = power OFF (SP = the current setpoint).
+ *     ID0 ID1 = 40 40 on the one remote captured, so X = SP-60 for 0x44.
+ *     Reading them as a per-remote device ID, and X as a byte sum, is a
+ *     hypothesis from one remote (docs/analysis/burst-structure.md).
  *   END_TAIL "0010011" "0000000"
  * A codeword is the 64-bit block value shifted left by one bit plus the
  * block's true last bit (BITS[name][1:] + lastbit[name]).
@@ -47,6 +50,15 @@
 
 #define CHILI_CMD_SET    0x44   /* setpoint press, also power ON */
 #define CHILI_CMD_OFF    0x50   /* power OFF press */
+
+/* Payload bytes 4 and 5: probably the remote's device ID.  Override with
+ * -DCHILI_ID0=0x.. -DCHILI_ID1=0x.. for a remote that sends other values. */
+#ifndef CHILI_ID0
+#define CHILI_ID0        0x40
+#endif
+#ifndef CHILI_ID1
+#define CHILI_ID1        0x40
+#endif
 
 struct chili_burst {
 	uint8_t addr1[CHILI_ADDR_LEN];
@@ -143,8 +155,9 @@ static inline void chili_encode_stream(uint8_t cmd, int sp,
 				       uint8_t stream[CHILI_FILE_BITS / 8])
 {
 	static const uint8_t hdr[8] = {0x80, 0x03, 0x80, 0x03, 0x5A, 0x5A, 0x80, 0x03};
-	uint8_t pkt[10] = {0x07, 0xA5, cmd, (uint8_t)sp, 0x40, 0x40, 0x00,
-			   (uint8_t)(cmd + sp - 0x80), 0, 0};
+	uint8_t pkt[10] = {0x07, 0xA5, cmd, (uint8_t)sp, CHILI_ID0, CHILI_ID1,
+			   0x00, (uint8_t)(cmd + sp + CHILI_ID0 + CHILI_ID1),
+			   0, 0};
 	uint16_t crc = chili_crc16_kermit(pkt, 8);
 	/* The full stream is 2323 bits; the extra byte takes the 3 cut bits. */
 	uint8_t tmp[CHILI_FILE_BITS / 8 + 1];

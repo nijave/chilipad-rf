@@ -109,15 +109,20 @@ def crc16_kermit(data: bytes) -> int:
 CMD_SET = 0x44  # setpoint press (also powers the Cube on)
 CMD_OFF = 0x50  # power-off press; still carries the remote's setpoint
 CMDS = {CMD_SET: "auto", CMD_OFF: "off"}
+# Payload bytes 4 and 5. Probably a per-remote device ID (a hypothesis from one
+# remote, see docs/analysis/burst-structure.md); --device-id replaces it.
+DEVICE_ID = bytes([0x40, 0x40])
 
 
 def packet(sp: int, cmd: int = CMD_SET) -> bytes:
     """Logical packet: length, 7-byte payload, CRC-16/KERMIT (low byte first).
 
-    Payload `A5 <cmd> SP 40 40 00 X` with X = (cmd + SP - 0x80) & 0xFF, so
-    X = SP-60 for a setpoint press and SP-48 for an off press."""
+    Payload `A5 <cmd> SP ID0 ID1 00 X` with X = (cmd + SP + ID0 + ID1) & 0xFF.
+    With the ID 40 40, X = SP-60 for a setpoint press and SP-48 for an off
+    press."""
+    id0, id1 = DEVICE_ID
     body = bytes(
-        [0x07, 0xA5, cmd, sp & 0xFF, 0x40, 0x40, 0x00, (cmd + sp - 0x80) & 0xFF]
+        [0x07, 0xA5, cmd, sp & 0xFF, id0, id1, 0x00, (cmd + sp + id0 + id1) & 0xFF]
     )
     c = crc16_kermit(body)
     return body + bytes([c & 0xFF, c >> 8])
@@ -936,6 +941,14 @@ def selftest(fixture_root: Path) -> int:
         "75 F packet + CRC-16/KERMIT",
     )
     check(packet(57)[-2:] == bytes([0x50, 0x22]), "57 F CRC 50 22")
+    check(
+        all(
+            packet(sp, cmd)[7] == (cmd + sp - 0x80) & 0xFF
+            for cmd in CMDS
+            for sp in range(40, 101)
+        ),
+        "checksum byte = captured (cmd + SP - 0x80) for ID 40 40",
+    )
     burst75 = fixture_root / "docs/analysis/bursts/75F.hex"
     if burst75.exists():
         hx = burst75.read_text().strip()
@@ -1076,6 +1089,13 @@ def parse_args(argv=None):
         help="do not capture remote presses",
     )
     p.add_argument(
+        "--device-id",
+        default=env("DEVICE_ID", DEVICE_ID.hex()),
+        metavar="HEX",
+        help="payload bytes 4-5 of the remote whose presses are decoded "
+        "(default: %(default)s)",
+    )
+    p.add_argument(
         "--log-level",
         default=env("LOG_LEVEL", "INFO"),
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -1112,11 +1132,15 @@ def parse_args(argv=None):
         p.error("--mqtt-host (or CHILIPAD_MQTT_HOST) is required")
     if not re.fullmatch(r"[A-Za-z0-9_-]+", a.unique_id):
         p.error("--unique-id may contain only letters, digits, '_' and '-'")
+    if not re.fullmatch(r"[0-9A-Fa-f]{4}", a.device_id):
+        p.error("--device-id must be 4 hex digits, for example 4040")
     return a
 
 
 def main(argv=None) -> int:
     a = parse_args(argv)
+    global DEVICE_ID
+    DEVICE_ID = bytes.fromhex(a.device_id)
     logging.basicConfig(
         level=a.log_level, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )

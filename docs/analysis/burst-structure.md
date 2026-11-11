@@ -289,7 +289,9 @@ Reading: `40 40` is the ID of the remote captured here, and `X` is a checksum,
 `SP-60` for `0x44` and `SP-48` for `0x50`. Which hidden bytes are the ID is
 not known; `SP` may be hidden only because it sits between them.
 
-Not tested: a second remote.
+Not tested: a second remote. The encoders take the ID as a setting
+(`CHILI_ID0`/`CHILI_ID1` in `nrf52/src/chili_encoder.h`, `--device-id` in the
+bridge) and default to `40 40`.
 
 ## Hypotheses: result
 
