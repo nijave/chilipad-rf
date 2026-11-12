@@ -1,0 +1,95 @@
+call hackrf_set_sample_rate(20000000 Hz/20.000 MHz)
+call hackrf_set_hw_sync_mode(0)
+call hackrf_set_freq(2446000000 Hz/2446.000 MHz)
+call hackrf_set_amp_enable(0)
+samples_to_xfer 1600000000/1600Mio
+Stop with Ctrl-C
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -36.3 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -35.6 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -37.5 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -38.9 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -39.4 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -39.6 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -40.0 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -39.2 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -39.6 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -39.0 dBfs
+39.3 MB / 1.000 sec = 39.3 MB/second, average power -40.2 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -38.9 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -37.0 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -34.1 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -34.3 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -34.5 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -34.8 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -33.7 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -34.3 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -34.4 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -35.7 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -35.0 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -34.4 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -35.7 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -34.8 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -35.3 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -35.3 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -35.7 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -39.2 dBfs
+39.8 MB / 1.000 sec = 39.9 MB/second, average power -39.3 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -39.6 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -39.4 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -38.7 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -39.5 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -38.5 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -38.6 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -38.9 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -36.7 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -34.2 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -34.2 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -34.1 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -35.2 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -33.9 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -35.2 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -34.2 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -35.0 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -32.1 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -29.9 dBfs
+39.8 MB / 1.000 sec = 39.9 MB/second, average power -26.2 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -22.8 dBfs
+39.8 MB / 1.000 sec = 39.9 MB/second, average power -22.9 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -27.1 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -35.2 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -38.3 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -39.1 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -39.6 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -40.0 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -39.3 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -39.9 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -38.9 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -39.1 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -39.8 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -39.2 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -34.2 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -34.7 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -35.0 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -33.7 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -35.7 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -35.4 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -34.9 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -35.1 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -35.3 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -34.4 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -35.1 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -34.9 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -35.8 dBfs
+39.8 MB / 1.000 sec = 39.8 MB/second, average power -34.6 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -34.4 dBfs
+40.1 MB / 1.000 sec = 40.1 MB/second, average power -39.0 dBfs
+39.6 MB / 1.000 sec = 39.6 MB/second, average power -38.6 dBfs
+ 1.8 MB / 0.041 sec = 45.0 MB/second, average power -40.6 dBfs
+
+Exiting...
+Total time: 80.04095 s
+hackrf_stop_rx() done
+hackrf_close() done
+hackrf_exit() done
+fclose() done
+exit

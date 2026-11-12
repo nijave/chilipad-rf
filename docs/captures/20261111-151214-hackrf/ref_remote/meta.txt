@@ -1,0 +1,10 @@
+start_epoch_ns 1794101733942507586
+freq_hz 2446000000
+rate_sps 20000000
+lna_gain_db 24
+vga_gain_db 20
+amp 0
+samples 1800000000
+note exp b2: laptop 2 m from cube, power 10, up 20, down 30, unplug 60
+end_epoch_ns 1794101824052345851
+exit_code 0

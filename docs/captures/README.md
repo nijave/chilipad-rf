@@ -38,8 +38,10 @@ Receivers: `nrf` = nRF52840 dongle, `esp` = ESP8266 + nRF24L01+ sniffer,
 | 20261104-200553 | nrf+esp | Poll-pair control: remote battery out or in another room; no presses |
 | 20261104-200739 | nrf+esp | Poll-pair control #2: remote battery out before start; no presses |
 | 20261104-201025 | nrf+esp | `S`/`O` firmware test: S77 at 8 s, O77 at 16 s, S72 at 24 s |
+| 20261104-201445 | nrf+esp | Wake scan: remote asleep, wake press ~3 s, second press ~6 s, UP ~9 s; nrf 12 s energy sweep ch 0–100. Energy on ch 2, 26, 80 (the BLE advertising channels) and two Wi-Fi blocks (ch 8–17, 55–69); ch 50 hardly shows although the esp decoded the presses |
 | 20261107-194951-hackrf | iq | Smoke test, away from the Cube (`poll-reply.md` section 6) |
 | 20261107-200343-hackrf | iq | Gain check near the Cube, no input |
 | 20261107-200551-hackrf | iq | Gain check near the Cube, LNA 32, no input |
 | 20261107-201142-hackrf | iq | Experiment b: off baseline, presses, OFF, unplug (ADC clipped family A packet 1; `poll-reply.md` section 7) |
 | 20261107-203533-hackrf | iq | Experiment b2: laptop 2 m from the Cube, unplug at ~60 s (families A and B are not the Cube) |
+| 20261111-151214-hackrf | iq | PCA10059 and Raytac dongles compared, `S68` only, interleaved 20 s apart; sub-runs `base*` (no transmit), `cap1`–`cap4`, `ref_remote` (re-analysis of 20261107-203533). Per-burst numbers in `summary.txt`; the scripts that made them sit in the directory. IQ deleted after analysis |

@@ -60,6 +60,14 @@ nrfutil nrf5sdk-tools dfu usb-serial -pkg app.zip -p /dev/ttyACM<n>
 Then open the application's own port (a different `/dev/ttyACM<n>`) and talk to
 it with any serial terminal, 115200 baud (the CDC ACM baud rate is ignored).
 
+A dongle that already runs this firmware does not need the button: the
+command `!boot` (the whole word, on its own line) reboots it into the
+bootloader. `tools/nrf-flash.sh <package.zip>` sends `!boot` if it finds the
+firmware, waits up to 10 minutes for the bootloader port, and flashes the
+package. It needs `nrfutil`, `uv` and `udevadm` on the host the dongle is
+plugged into. `!boot` was used on the PCA10059; it has not been tried on the
+Raytac dongle.
+
 ## Commands
 
 | Command | Action |
