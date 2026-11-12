@@ -1,0 +1,153 @@
++0.008408 [cfg] channel -> 50 (2450 MHz)
++13.019354 [scan] 12 s RSSI sweep over ch 0..100, press remote buttons...
++13.020479 [scan] 842 sweeps; S <ch> <samples above -75 dBm> <max dBm>
++13.020685 S 0 0 -86
++13.020900 S 1 32 -53
++13.021150 S 2 160 -41
++13.021377 S 3 81 -47
++13.021582 S 4 13 -68
++13.021789 S 5 16 -64
++13.021993 S 6 23 -62
++13.022217 S 7 37 -60
++13.022439 S 8 278 -62
++13.022701 S 9 532 -68
++13.022944 S 10 737 -63
++13.023206 S 11 934 -60
++13.023459 S 12 803 -56
++13.023694 S 13 950 -51
++13.023925 S 14 923 -50
++13.024171 S 15 845 -62
++13.024406 S 16 788 -60
++13.024638 S 17 587 -67
++13.024855 S 18 26 -61
++13.025166 S 19 37 -61
++13.025399 S 20 29 -67
++13.025608 S 21 6 -69
++13.025816 S 22 0 -79
++13.026021 S 23 0 -89
++13.026253 S 24 8 -64
++13.026523 S 25 28 -62
++13.026769 S 26 159 -51
++13.026994 S 27 72 -58
++13.027241 S 28 48 -48
++13.027511 S 29 56 -49
++13.027762 S 30 73 -49
++13.027995 S 31 67 -49
++13.028246 S 32 59 -49
++13.028475 S 33 50 -49
++13.028700 S 34 26 -48
++13.028963 S 35 93 -46
++13.029223 S 36 134 -42
++13.029494 S 37 139 -49
++13.029738 S 38 155 -48
++13.030002 S 39 92 -54
++13.030257 S 40 72 -49
++13.030502 S 41 130 -44
++13.030770 S 42 120 -48
++13.030999 S 43 108 -49
++13.031299 S 44 110 -50
++13.031545 S 45 106 -49
++13.031788 S 46 47 -53
++13.032024 S 47 23 -51
++13.032262 S 48 16 -49
++13.032460 S 49 8 -53
++13.032661 S 50 8 -63
++13.032875 S 51 15 -51
++13.033137 S 52 19 -51
++13.033345 S 53 8 -59
++13.033567 S 54 16 -63
++13.033806 S 55 412 -29
++13.034060 S 56 618 -64
++13.034302 S 57 693 -58
++13.034591 S 58 708 -56
++13.034835 S 59 771 -53
++13.035139 S 60 828 -53
++13.035373 S 61 913 -51
++13.035601 S 62 823 -52
++13.035830 S 63 908 -52
++13.036132 S 64 922 -51
++13.036381 S 65 894 -54
++13.036612 S 66 831 -57
++13.036855 S 67 730 -60
++13.037135 S 68 510 -61
++13.037364 S 69 436 -68
++13.037578 S 70 17 -69
++13.037792 S 71 12 -69
++13.037990 S 72 8 -59
++13.038224 S 73 7 -63
++13.038434 S 74 0 -88
++13.038642 S 75 7 -62
++13.038851 S 76 7 -69
++13.039113 S 77 15 -52
++13.039339 S 78 13 -55
++13.039564 S 79 63 -58
++13.039804 S 80 153 -38
++13.040055 S 81 109 -51
++13.040266 S 82 0 -76
++13.040466 S 83 0 -89
++13.040663 S 84 0 -91
++13.040858 S 85 0 -92
++13.041082 S 86 0 -92
++13.041301 S 87 0 -92
++13.041508 S 88 0 -89
++13.041714 S 89 0 -92
++13.041923 S 90 0 -90
++13.042158 S 91 0 -90
++13.042361 S 92 0 -91
++13.042574 S 93 0 -91
++13.042824 S 94 0 -91
++13.043035 S 95 0 -90
++13.043270 S 96 0 -89
++13.043486 S 97 31 -63
++13.043743 S 98 60 -62
++13.044015 S 99 77 -59
++13.044295 S 100 70 -60
++13.044527 [scan] done
++16.053173 === chilipad-sniffer (nRF52840 dongle, LT8920 2.4 GHz) ===
++16.053883 h            help + current config
++16.054965 p            start/stop capture (starts OFF at boot)
++16.056076 c<n>         channel 0..100 (default 50 = 2450 MHz)
++16.056882 l<n>         payload length 1..255 (default 64)
++16.058027 w<hex>       trigger address, 3..5 bytes on-air order (0B5C8E03)
++16.059024 'w' alone resets the address to the default
++16.059998 o            toggle byte order (as given <-> reversed)
++16.061057 r            toggle per-byte bit reversal (on by default)
++16.062235 s<sec>       energy scan ch 0..100 for <sec> s (default 2, max 60)
++16.063649 e<ms>        energy vs time on channel c for <ms> (default 2000, max 30000)
++16.064690 y<list>@<ms> hop channels, e.g. y10,30,50,70@200; 'y' stops
++16.065777 x<n>         replay the last captured frame n times (default 10)
++16.066988 t<hex>       load TX segment 1 (up to 255 bytes); same as t1<hex>
++16.067935 t1<hex>      load TX segment 1; 't1' alone clears it
++16.068875 t2<hex>      load TX segment 2; 't2' alone clears it
++16.069685 't' alone clears both segments
++16.070902 z<n>         send seg1 (+ seg2 back-to-back) n times, 1..1000
++16.072100 (default 1), each seg = preamble + 'w' addr + payload
++16.073238 m<rate>      data rate for RX and TX: m1 = 1 Mbit, m2 = 2 Mbit,
++16.074276 mb1 = BLE 1 Mbit (default), mb2 = BLE 2 Mbit
++16.075300 (m250 = 250 kbit: not in this MDK, rejected)
++16.076592 j<ms>[b0|b1|c] carrier lead-in before each z burst, 0 = off (b1 default)
++16.077816 v<hex>       address for segment 2 of z (same length as w); 'v' clears
++16.078900 k<ms>        unmodulated carrier for 1..5000 ms on channel c;
++16.080104 k<ms>b0 / k<ms>b1 = constant '0' / '1' tone (DTX B0/B1)
++16.081062 d            radio register dump + ISR and TX counters
++16.082305 S<F>[,<n>]   set the Cube to <F> degF (55..93): encode + send the burst
++16.083441 n times (1..10, default 1, 100 ms apart); use c50 mb1
++16.084671 O<F>[,<n>]   power the Cube OFF; <F> = its current setpoint (55..93)
++16.085283 (power ON = any S<F>)
++16.086464 T<F> / TO<F> print addr1 seg1 addr2 seg2 of S<F> / O<F>, send nothing
++16.087005 channel       : 50 (2450 MHz)
++16.087831 data rate     : Ble_1Mbit (8 us/byte, RX and TX)
++16.088176 payload len   : 64
++16.088983 trigger addr  : 0B5C8E03 (4 bytes, on-air order)
++16.089424 byte order    : as given
++16.089752 bit reversal  : on
++16.090620 BALEN         : 3 (address = BALEN + 1 prefix byte)
++16.091093 BASE0         : 0x713AD000
++16.092120 PREFIX0       : 0xC0 (AP0, most significant address byte)
++16.092556 HFXO          : running
++16.092926 capture       : off
++16.093258 packets       : 0
++16.093572 ring drops    : 0
++16.094122 output drops  : 0 bytes
++16.102477 tx seg1       : 154 bytes 55555555555555555555555555555555555555555555527116195A033E5CD6A57C203071DC59348E2F4E604B88A2C27116195A033E5CD27116195A033E5CD6A57C203071DC59348E2F4E604B88A2C27116195A033E5CDE040EC9942ACACE5144F8073A58D9089E040EC9942ACACE5144F8073A58D908927116195A033E5CD6A57C203071DC59348E2F4E604B88A2C27116195A033E5CDA9831FC
++16.108335 tx seg2       : 154 bytes 27116195A033E5CD144F8073A58D9089E040EC9942ACACE54FC062E28214EE594FC062E28214EE596A57C203071DC5934FC062E28214EE5927116195A033E5CD4FC062E28214EE5927116195A033E5CD4FC062E28214EE5927116195A033E5CD27116195A033E5CDC66248051A20BF2F27116195A033E5CD89E606094BD9AAB916315530D86605BDE040EC9942ACACE52606BC36872B88052600

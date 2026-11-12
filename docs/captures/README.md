@@ -38,6 +38,7 @@ Receivers: `nrf` = nRF52840 dongle, `esp` = ESP8266 + nRF24L01+ sniffer,
 | 20261104-200553 | nrf+esp | Poll-pair control: remote battery out or in another room; no presses |
 | 20261104-200739 | nrf+esp | Poll-pair control #2: remote battery out before start; no presses |
 | 20261104-201025 | nrf+esp | `S`/`O` firmware test: S77 at 8 s, O77 at 16 s, S72 at 24 s |
+| 20261104-201445 | nrf+esp | Wake scan: remote asleep, wake press ~3 s, second press ~6 s, UP ~9 s; nrf 12 s energy sweep ch 0–100. Energy on ch 2, 26, 80 (the BLE advertising channels) and two Wi-Fi blocks (ch 8–17, 55–69); ch 50 hardly shows although the esp decoded the presses |
 | 20261107-194951-hackrf | iq | Smoke test, away from the Cube (`poll-reply.md` section 6) |
 | 20261107-200343-hackrf | iq | Gain check near the Cube, no input |
 | 20261107-200551-hackrf | iq | Gain check near the Cube, LNA 32, no input |
