@@ -1,0 +1,257 @@
+== ('ORIGINAL', 'cap4') n= 2 [('cap4', 16.708), ('cap4', 60.704)]
+   pwr_db                     mean     -83.38  sd     0.06  min     -83.44 max     -83.32
+   snr_db                     mean      16.27  sd     0.33  min      15.94 max      16.60
+   cfo_demod_kHz              mean      18.78  sd     0.19  min      18.58 max      18.97
+   cfo_fit_kHz                mean      20.78  sd     0.08  min      20.70 max      20.86
+   cfo_ppm                    mean       8.48  sd     0.03  min       8.45 max       8.51
+   dev_demod_kHz              mean     278.95  sd     0.94  min     278.00 max     279.89
+   dev_fit_kHz                mean     265.86  sd     1.35  min     264.50 max     267.21
+   dur_us                     mean    2564.00  sd     0.25  min    2563.75 max    2564.25
+   on50_us                    mean    2562.88  sd     0.02  min    2562.85 max    2562.90
+   rise_us                    mean      29.52  sd     0.37  min      29.15 max      29.90
+   fall_us                    mean      30.88  sd     0.33  min      30.55 max      31.20
+   lead_us                    mean      12.80  sd     0.50  min      12.30 max      13.30
+   lead_f_kHz                 mean      -7.51  sd     5.26  min     -12.77 max      -2.25
+   alt_bits                   mean     219.50  sd     0.50  min     219.00 max     220.00
+   drift_Hz_per_ms            mean     413.84  sd   592.26  min    -178.42 max    1006.10
+   cfo_win_std_Hz             mean    3368.27  sd   826.48  min    2541.79 max    4194.74
+   first100us_minus_mean_Hz   mean     -56.99  sd  3374.47  min   -3431.46 max    3317.49
+   junc_phase_deg             mean     -70.11  sd     0.06  min     -70.17 max     -70.04
+   junc_maxres_kHz            mean     456.99  sd    31.11  min     425.88 max     488.10
+   junc_rmsres_kHz            mean     116.63  sd    11.51  min     105.12 max     128.15
+   ref_rmsres_kHz             mean     106.70  sd     6.60  min     100.10 max     113.30
+   junc_minamp                mean       0.92  sd     0.02  min       0.90 max       0.95
+   ref_minamp                 mean       0.84  sd     0.00  min       0.84 max       0.85
+   obw99_kHz                  mean    2324.22  sd   507.81  min    1816.41 max    2832.03
+   bw20_kHz                   mean    1289.06  sd     0.00  min    1289.06 max    1289.06
+   psd-1.0                    mean     -22.30  sd     0.21  min     -22.51 max     -22.09
+   psd+1.0                    mean     -21.62  sd     0.57  min     -22.19 max     -21.05
+   psd-1.5                    mean     -22.70  sd     0.26  min     -22.95 max     -22.44
+   psd+1.5                    mean     -22.45  sd     0.31  min     -22.76 max     -22.14
+   psd-2.0                    mean     -22.77  sd     0.77  min     -23.54 max     -22.00
+   psd+2.0                    mean     -22.81  sd     0.14  min     -22.95 max     -22.67
+   errs                       mean       1.00  sd     1.00  min       0.00 max       2.00
+== ('ORIGINAL', 'hi') n= 5 [('cap2', 18.338), ('cap2', 61.525), ('cap2', 104.626), ('cap3', 16.188), ('cap3', 59.554)]
+   pwr_db                     mean     -62.10  sd     0.36  min     -62.52 max     -61.49
+   snr_db                     mean      30.32  sd     1.74  min      26.90 max      31.48
+   cfo_demod_kHz              mean      18.49  sd     0.85  min      17.47 max      19.52
+   cfo_fit_kHz                mean      20.60  sd     0.26  min      20.34 max      21.08
+   cfo_ppm                    mean       8.41  sd     0.11  min       8.30 max       8.61
+   dev_demod_kHz              mean     278.98  sd     1.40  min     277.20 max     280.55
+   dev_fit_kHz                mean     282.29  sd     0.56  min     281.30 max     282.89
+   dur_us                     mean    2568.25  sd     7.13  min    2564.25 max    2582.50
+   on50_us                    mean    2563.18  sd     0.40  min    2562.60 max    2563.70
+   rise_us                    mean       3.06  sd     0.07  min       2.95 max       3.15
+   fall_us                    mean       4.13  sd     3.41  min       2.35 max      10.95
+   lead_us                    mean      20.11  sd    16.61  min      10.35 max      53.30
+   lead_f_kHz                 mean     -11.64  sd     8.91  min     -29.06 max      -4.43
+   alt_bits                   mean     212.20  sd    16.62  min     179.00 max     222.00
+   drift_Hz_per_ms            mean     300.24  sd   256.77  min      41.41 max     788.99
+   cfo_win_std_Hz             mean    1274.63  sd   127.37  min    1141.40 max    1505.62
+   first100us_minus_mean_Hz   mean    -973.51  sd   487.97  min   -1405.85 max     -71.37
+   junc_phase_deg             mean     -87.92  sd     3.10  min     -92.21 max     -83.71
+   junc_maxres_kHz            mean     307.80  sd    15.34  min     288.14 max     331.09
+   junc_rmsres_kHz            mean      80.00  sd     3.67  min      75.99 max      85.00
+   ref_rmsres_kHz             mean      40.49  sd     2.45  min      38.00 max      45.12
+   junc_minamp                mean       0.97  sd     0.00  min       0.96 max       0.97
+   ref_minamp                 mean       0.95  sd     0.01  min       0.95 max       0.96
+   obw99_kHz                  mean    1152.34  sd   156.25  min    1074.22 max    1464.84
+   bw20_kHz                   mean    1230.47  sd     0.00  min    1230.47 max    1230.47
+   psd-1.0                    mean     -29.95  sd     0.46  min     -30.34 max     -29.05
+   psd+1.0                    mean     -27.83  sd     0.35  min     -28.17 max     -27.40
+   psd-1.5                    mean     -36.00  sd     1.04  min     -37.07 max     -34.03
+   psd+1.5                    mean     -34.85  sd     1.82  min     -36.33 max     -31.79
+   psd-2.0                    mean     -34.59  sd     0.77  min     -35.71 max     -33.33
+   psd+2.0                    mean     -36.39  sd     1.13  min     -37.69 max     -34.33
+   errs                       mean       0.00  sd     0.00  min       0.00 max       0.00
+== ('ORIGINAL', 'hi-interfered') n= 2 [('cap3', 59.451), ('cap3', 59.657)]
+   pwr_db                     mean     -61.99  sd     0.12  min     -62.11 max     -61.87
+   snr_db                     mean      31.57  sd     0.07  min      31.50 max      31.64
+   cfo_demod_kHz              mean      21.18  sd     1.69  min      19.49 max      22.88
+   cfo_fit_kHz                mean      17.91  sd     2.88  min      15.03 max      20.79
+   cfo_ppm                    mean       7.31  sd     1.17  min       6.13 max       8.48
+   dev_demod_kHz              mean     285.16  sd     4.04  min     281.12 max     289.21
+   dev_fit_kHz                mean     273.42  sd     3.04  min     270.39 max     276.46
+   dur_us                     mean    2564.25  sd     0.00  min    2564.25 max    2564.25
+   on50_us                    mean    2562.90  sd     0.05  min    2562.85 max    2562.95
+   rise_us                    mean       3.05  sd     0.05  min       3.00 max       3.10
+   fall_us                    mean       2.60  sd     0.10  min       2.50 max       2.70
+   lead_us                    mean     249.82  sd   236.52  min      13.30 max     486.35
+   lead_f_kHz                 mean      -5.76  sd     2.30  min      -8.07 max      -3.46
+   alt_bits                   mean     110.50  sd   108.50  min       2.00 max     219.00
+   drift_Hz_per_ms            mean   -1440.64  sd   566.34  min   -2006.98 max    -874.30
+   cfo_win_std_Hz             mean    6469.22  sd   819.42  min    5649.80 max    7288.64
+   first100us_minus_mean_Hz   mean      17.10  sd   524.09  min    -506.99 max     541.19
+   junc_phase_deg             mean     -56.74  sd    23.26  min     -80.00 max     -33.48
+   junc_maxres_kHz            mean    3999.35  sd  3697.94  min     301.41 max    7697.28
+   junc_rmsres_kHz            mean     587.66  sd   511.94  min      75.72 max    1099.61
+   ref_rmsres_kHz             mean     138.94  sd    95.37  min      43.58 max     234.31
+   junc_minamp                mean       0.82  sd     0.17  min       0.65 max       0.99
+   ref_minamp                 mean       0.71  sd     0.23  min       0.48 max       0.95
+   obw99_kHz                  mean    4541.02  sd  1083.98  min    3457.03 max    5625.00
+   bw20_kHz                   mean    1289.06  sd    39.06  min    1250.00 max    1328.12
+   psd-1.0                    mean     -21.10  sd     4.68  min     -25.78 max     -16.42
+   psd+1.0                    mean     -23.62  sd     1.34  min     -24.97 max     -22.28
+   psd-1.5                    mean     -22.20  sd     2.34  min     -24.54 max     -19.87
+   psd+1.5                    mean     -23.11  sd     2.49  min     -25.60 max     -20.62
+   psd-2.0                    mean     -22.58  sd     3.55  min     -26.13 max     -19.03
+   psd+2.0                    mean     -21.43  sd     4.54  min     -25.98 max     -16.89
+   errs                       mean     371.50  sd   357.50  min      14.00 max     729.00
+== ('RAYTAC', 'cap1') n= 3 [('cap1', 39.422), ('cap1', 83.384), ('cap1', 126.809)]
+   pwr_db                     mean     -69.85  sd     0.01  min     -69.86 max     -69.84
+   snr_db                     mean      30.23  sd     0.32  min      29.79 max      30.50
+   cfo_demod_kHz              mean       7.12  sd     0.15  min       6.95 max       7.33
+   cfo_fit_kHz                mean       7.37  sd     0.25  min       7.02 max       7.60
+   cfo_ppm                    mean       3.01  sd     0.10  min       2.87 max       3.10
+   dev_demod_kHz              mean     281.22  sd     0.55  min     280.44 max     281.69
+   dev_fit_kHz                mean     281.90  sd     0.88  min     280.76 max     282.91
+   dur_us                     mean    2564.33  sd     0.24  min    2564.00 max    2564.50
+   on50_us                    mean    2562.75  sd     0.07  min    2562.65 max    2562.80
+   rise_us                    mean      11.15  sd    11.46  min       3.05 max      27.35
+   fall_us                    mean       2.52  sd     0.21  min       2.30 max       2.80
+   lead_us                    mean      12.90  sd     0.46  min      12.25 max      13.30
+   lead_f_kHz                 mean      -7.69  sd     1.44  min      -9.73 max      -6.57
+   alt_bits                   mean     219.33  sd     0.47  min     219.00 max     220.00
+   drift_Hz_per_ms            mean     172.11  sd   106.79  min      64.47 max     317.68
+   cfo_win_std_Hz             mean    1112.57  sd    58.44  min    1069.13 max    1195.19
+   first100us_minus_mean_Hz   mean    -767.28  sd   451.65  min   -1397.93 max    -364.21
+   junc_phase_deg             mean     -84.45  sd     2.84  min     -87.47 max     -80.65
+   junc_maxres_kHz            mean     318.92  sd     7.36  min     308.57 max     325.07
+   junc_rmsres_kHz            mean      76.59  sd     4.96  min      70.87 max      82.96
+   ref_rmsres_kHz             mean      41.34  sd     3.14  min      39.02 max      45.78
+   junc_minamp                mean       0.97  sd     0.02  min       0.94 max       0.99
+   ref_minamp                 mean       0.95  sd     0.02  min       0.93 max       0.97
+   obw99_kHz                  mean    1210.94  sd   179.72  min    1074.22 max    1464.84
+   bw20_kHz                   mean    1217.45  sd     9.21  min    1210.94 max    1230.47
+   psd-1.0                    mean     -28.91  sd     0.44  min     -29.50 max     -28.43
+   psd+1.0                    mean     -28.31  sd     0.41  min     -28.81 max     -27.81
+   psd-1.5                    mean     -35.06  sd     2.48  min     -36.88 max     -31.55
+   psd+1.5                    mean     -34.42  sd     2.08  min     -36.38 max     -31.54
+   psd-2.0                    mean     -35.65  sd     0.46  min     -36.22 max     -35.09
+   psd+2.0                    mean     -32.77  sd     4.15  min     -36.74 max     -27.04
+   errs                       mean       0.00  sd     0.00  min       0.00 max       0.00
+== ('RAYTAC', 'cap4') n= 1 [('cap4', 38.315)]
+   pwr_db                     mean     -75.93  sd     0.00  min     -75.93 max     -75.93
+   snr_db                     mean      24.01  sd     0.00  min      24.01 max      24.01
+   cfo_demod_kHz              mean       7.38  sd     0.00  min       7.38 max       7.38
+   cfo_fit_kHz                mean       7.08  sd     0.00  min       7.08 max       7.08
+   cfo_ppm                    mean       2.89  sd     0.00  min       2.89 max       2.89
+   dev_demod_kHz              mean     281.83  sd     0.00  min     281.83 max     281.83
+   dev_fit_kHz                mean     279.85  sd     0.00  min     279.85 max     279.85
+   dur_us                     mean    2563.50  sd     0.00  min    2563.50 max    2563.50
+   on50_us                    mean    2563.00  sd     0.00  min    2563.00 max    2563.00
+   rise_us                    mean       3.55  sd     0.00  min       3.55 max       3.55
+   fall_us                    mean       2.30  sd     0.00  min       2.30 max       2.30
+   lead_us                    mean      12.45  sd     0.00  min      12.45 max      12.45
+   lead_f_kHz                 mean      -8.91  sd     0.00  min      -8.91 max      -8.91
+   alt_bits                   mean     220.00  sd     0.00  min     220.00 max     220.00
+   drift_Hz_per_ms            mean     159.26  sd     0.00  min     159.26 max     159.26
+   cfo_win_std_Hz             mean    1392.74  sd     0.00  min    1392.74 max    1392.74
+   first100us_minus_mean_Hz   mean      52.95  sd     0.00  min      52.95 max      52.95
+   junc_phase_deg             mean     -79.65  sd     0.00  min     -79.65 max     -79.65
+   junc_maxres_kHz            mean     338.49  sd     0.00  min     338.49 max     338.49
+   junc_rmsres_kHz            mean      81.46  sd     0.00  min      81.46 max      81.46
+   ref_rmsres_kHz             mean      48.62  sd     0.00  min      48.62 max      48.62
+   junc_minamp                mean       0.96  sd     0.00  min       0.96 max       0.96
+   ref_minamp                 mean       0.92  sd     0.00  min       0.92 max       0.92
+   obw99_kHz                  mean    1093.75  sd     0.00  min    1093.75 max    1093.75
+   bw20_kHz                   mean    1230.47  sd     0.00  min    1230.47 max    1230.47
+   psd-1.0                    mean     -27.15  sd     0.00  min     -27.15 max     -27.15
+   psd+1.0                    mean     -27.06  sd     0.00  min     -27.06 max     -27.06
+   psd-1.5                    mean     -29.65  sd     0.00  min     -29.65 max     -29.65
+   psd+1.5                    mean     -29.64  sd     0.00  min     -29.64 max     -29.64
+   psd-2.0                    mean     -30.26  sd     0.00  min     -30.26 max     -30.26
+   psd+2.0                    mean     -28.97  sd     0.00  min     -28.97 max     -28.97
+   errs                       mean       0.00  sd     0.00  min       0.00 max       0.00
+== ('RAYTAC', 'hi') n= 5 [('cap2', 39.968), ('cap2', 83.158), ('cap2', 126.528), ('cap3', 37.804), ('cap3', 81.127)]
+   pwr_db                     mean     -54.81  sd     1.22  min     -57.21 max     -53.97
+   snr_db                     mean      38.88  sd     0.96  min      37.74 max      40.23
+   cfo_demod_kHz              mean       6.65  sd     0.36  min       6.25 max       7.14
+   cfo_fit_kHz                mean       7.16  sd     0.61  min       5.94 max       7.52
+   cfo_ppm                    mean       2.92  sd     0.25  min       2.43 max       3.07
+   dev_demod_kHz              mean     279.01  sd     1.04  min     278.33 max     281.05
+   dev_fit_kHz                mean     281.12  sd     3.37  min     274.39 max     282.95
+   dur_us                     mean    3210.35  sd  1104.22  min    2564.75 max    5400.00
+   on50_us                    mean    2562.80  sd     0.20  min    2562.65 max    2563.20
+   rise_us                    mean     411.72  sd   645.55  min       3.00 max    1669.45
+   fall_us                    mean     236.06  sd   467.25  min       2.40 max    1170.55
+   lead_us                    mean      12.67  sd     0.43  min      12.20 max      13.20
+   lead_f_kHz                 mean      -6.42  sd     1.94  min      -9.26 max      -3.66
+   alt_bits                   mean     219.60  sd     0.49  min     219.00 max     220.00
+   drift_Hz_per_ms            mean      68.25  sd    63.96  min      -4.03 max     166.53
+   cfo_win_std_Hz             mean    1196.75  sd   144.32  min    1045.55 max    1471.92
+   first100us_minus_mean_Hz   mean    -348.21  sd   755.96  min   -1092.73 max    1070.27
+   junc_phase_deg             mean     -85.64  sd     2.89  min     -88.52 max     -80.51
+   junc_maxres_kHz            mean     295.79  sd    46.78  min     204.70 max     333.88
+   junc_rmsres_kHz            mean      75.05  sd     7.44  min      64.97 max      87.94
+   ref_rmsres_kHz             mean      42.38  sd    11.02  min      36.02 max      64.37
+   junc_minamp                mean       0.98  sd     0.02  min       0.95 max       1.00
+   ref_minamp                 mean       0.97  sd     0.01  min       0.96 max       0.98
+   obw99_kHz                  mean    1750.00  sd  1264.60  min    1074.22 max    4277.34
+   bw20_kHz                   mean    1214.84  sd     7.81  min    1210.94 max    1230.47
+   psd-1.0                    mean     -29.11  sd     1.02  min     -29.91 max     -27.11
+   psd+1.0                    mean     -28.60  sd     0.94  min     -29.22 max     -26.76
+   psd-1.5                    mean     -35.44  sd     5.17  min     -39.26 max     -25.43
+   psd+1.5                    mean     -35.48  sd     4.28  min     -39.54 max     -28.10
+   psd-2.0                    mean     -37.34  sd     2.14  min     -39.86 max     -33.41
+   psd+2.0                    mean     -32.49  sd     8.06  min     -40.17 max     -21.08
+   errs                       mean       0.00  sd     0.00  min       0.00 max       0.00
+== ('remote', 'ref') n= 3 [('ref_remote', 10.73), ('ref_remote', 20.835), ('ref_remote', 30.858)]
+   pwr_db                     mean     -80.86  sd     3.24  min     -84.04 max     -76.41
+   snr_db                     mean      19.07  sd     3.33  min      16.26 max      23.75
+   cfo_demod_kHz              mean     -30.61  sd     0.61  min     -31.32 max     -29.84
+   cfo_fit_kHz                mean     -20.23  sd     3.10  min     -23.02 max     -15.91
+   cfo_ppm                    mean      -8.26  sd     1.26  min      -9.40 max      -6.49
+   dev_demod_kHz              mean     348.40  sd     1.61  min     346.88 max     350.63
+   dev_fit_kHz                mean     336.08  sd     4.10  min     330.30 max     339.21
+   dur_us                     mean    2428.33  sd     0.96  min    2427.00 max    2429.25
+   on50_us                    mean    2423.98  sd     0.17  min    2423.75 max    2424.15
+   rise_us                    mean      25.80  sd    13.66  min       6.50 max      36.10
+   fall_us                    mean      24.68  sd    12.68  min       6.90 max      35.60
+   lead_us                    mean      82.52  sd     0.38  min      82.20 max      83.05
+   lead_f_kHz                 mean     -62.12  sd    12.10  min     -79.16 max     -52.30
+   alt_bits                   mean      24.00  sd     0.00  min      24.00 max      24.00
+   drift_Hz_per_ms            mean    1485.25  sd  6339.08  min   -5243.72 max    9979.71
+   cfo_win_std_Hz             mean    9726.52  sd  6153.54  min    5207.27 max   18426.76
+   first100us_minus_mean_Hz   mean   -4195.48  sd  5520.14  min   -9893.85 max    3274.79
+   junc_phase_deg             mean    -124.46  sd     4.70  min    -130.59 max    -119.18
+   junc_maxres_kHz            mean     282.97  sd    81.05  min     203.21 max     394.15
+   junc_rmsres_kHz            mean     106.09  sd    13.00  min      89.57 max     121.34
+   ref_rmsres_kHz             mean      94.72  sd    19.61  min      70.15 max     118.14
+   junc_minamp                mean       0.92  sd     0.02  min       0.90 max       0.95
+   ref_minamp                 mean       0.86  sd     0.05  min       0.80 max       0.92
+   obw99_kHz                  mean    2819.01  sd  1564.48  min    1406.25 max    5000.00
+   bw20_kHz                   mean    2337.24  sd   883.93  min    1386.72 max    3515.62
+   psd-1.0                    mean     -20.59  sd     2.05  min     -23.44 max     -18.65
+   psd+1.0                    mean     -19.88  sd     1.03  min     -21.34 max     -19.14
+   psd-1.5                    mean     -20.40  sd     0.64  min     -21.08 max     -19.53
+   psd+1.5                    mean     -21.16  sd     1.72  min     -23.53 max     -19.48
+   psd-2.0                    mean     -20.72  sd     1.66  min     -22.80 max     -18.72
+   psd+2.0                    mean     -20.45  sd     0.77  min     -21.23 max     -19.41
+   errs                       mean       3.00  sd     3.56  min       0.00 max       8.00
+PSD (dB rel peak), cap2+cap3 clean bursts, offset MHz: ORIGINAL / RAYTAC / diff
+   -5.00    -31.1   -37.2   +6.1
+   -4.00    -34.9   -37.0   +2.2
+   -3.00    -36.2   -37.2   +0.9
+   -2.50    -36.6   -37.4   +0.8
+   -2.00    -35.5   -35.8   +0.3
+   -1.50    -35.9   -31.5   -4.4
+   -1.25    -35.6   -32.8   -2.8
+   -1.00    -31.1   -29.9   -1.3
+   -0.75    -31.6   -29.9   -1.7
+   -0.50    -13.9   -12.6   -1.3
+   -0.25     -4.5    -4.0   -0.4
+   +0.00     -1.3    -1.4   +0.1
+   +0.25     -5.1    -5.5   +0.4
+   +0.50    -11.5   -12.3   +0.8
+   +0.75    -29.1   -29.1   +0.0
+   +1.00    -28.9   -29.8   +0.9
+   +1.25    -33.6   -34.2   +0.5
+   +1.50    -34.4   -32.7   -1.7
+   +2.00    -36.0   -27.0   -9.0
+   +2.50    -33.2   -27.0   -6.2
+   +3.00    -32.9   -27.3   -5.6
+   +4.00    -32.6   -31.6   -0.9
+   +5.00    -29.0   -32.1   +3.1
+   +6.00    -23.0   -31.5   +8.5
+   +8.00    -16.6   -26.9  +10.3

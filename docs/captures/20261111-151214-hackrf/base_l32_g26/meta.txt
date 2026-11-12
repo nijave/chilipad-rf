@@ -1,0 +1,10 @@
+start_epoch_ns 1794429034220226112
+freq_hz 2446000000
+rate_sps 20000000
+lna_gain_db 32
+vga_gain_db 26
+amp 0
+samples 200000000
+note baseline gain check, no transmit
+end_epoch_ns 1794429044246211965
+exit_code 0

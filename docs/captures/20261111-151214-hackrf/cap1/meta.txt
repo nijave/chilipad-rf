@@ -1,0 +1,10 @@
+start_epoch_ns 1794428436732360385
+freq_hz 2446000000
+rate_sps 20000000
+lna_gain_db 24
+vga_gain_db 20
+amp 0
+samples 3000000000
+note interleaved A B A B A B, 20 s apart
+end_epoch_ns 1794428587013529448
+exit_code 0

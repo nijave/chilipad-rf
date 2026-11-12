@@ -44,3 +44,4 @@ Receivers: `nrf` = nRF52840 dongle, `esp` = ESP8266 + nRF24L01+ sniffer,
 | 20261107-200551-hackrf | iq | Gain check near the Cube, LNA 32, no input |
 | 20261107-201142-hackrf | iq | Experiment b: off baseline, presses, OFF, unplug (ADC clipped family A packet 1; `poll-reply.md` section 7) |
 | 20261107-203533-hackrf | iq | Experiment b2: laptop 2 m from the Cube, unplug at ~60 s (families A and B are not the Cube) |
+| 20261111-151214-hackrf | iq | PCA10059 and Raytac dongles compared, `S68` only, interleaved 20 s apart; sub-runs `base*` (no transmit), `cap1`–`cap4`, `ref_remote` (re-analysis of 20261107-203533). Per-burst numbers in `summary.txt`; the scripts that made them sit in the directory. IQ deleted after analysis |

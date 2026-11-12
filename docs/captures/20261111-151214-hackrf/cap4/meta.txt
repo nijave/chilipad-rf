@@ -1,0 +1,10 @@
+start_epoch_ns 1794429818932477057
+freq_hz 2446000000
+rate_sps 20000000
+lna_gain_db 24
+vga_gain_db 20
+amp 0
+samples 1600000000
+note LNA24 VGA20 (cap1 settings), A B A, 20 s apart
+end_epoch_ns 1794429898989858929
+exit_code 0
