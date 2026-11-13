@@ -13,7 +13,7 @@
 # --group-add keep-groups (quadlet GroupAdd=keep-groups) so the process keeps
 # the host user's supplementary groups, including dialout. See README.md.
 
-FROM ghcr.io/astral-sh/uv:0.13.7 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.8 AS uv
 
 # Builder: resolve exactly what uv.lock pins into /app/.venv.
 FROM docker.io/library/python:3.15.2-slim-trixie AS build
